@@ -133,6 +133,8 @@ export function TravelMap({
     return () => {
       cancelAnimationFrame(raf);
       mapEngine.map.off("load", onLoad);
+      mapEngine.map.off("move", schedule);
+      mapEngine.map.off("resize", schedule);
       mapEngine.destroy();
       if (engineRef.current === mapEngine) engineRef.current = null;
     };

@@ -72,6 +72,7 @@ export function recordRealtime({
   let cancelled = false;
   let playback: PlaybackController | null = null;
   let recorder: MediaRecorder | null = null;
+  let stream: MediaStream | null = null;
   let progressTimer: ReturnType<typeof setInterval> | null = null;
 
   const done = (async (): Promise<RecordResult | null> => {
@@ -90,7 +91,8 @@ export function recordRealtime({
       const { mimeType, ext } = pickRecorderMime();
       const w = compositor.canvas.width;
       const h = compositor.canvas.height;
-      recorder = new MediaRecorder(compositor.canvas.captureStream(fps), {
+      stream = compositor.canvas.captureStream(fps);
+      recorder = new MediaRecorder(stream, {
         ...(mimeType ? { mimeType } : {}),
         videoBitsPerSecond: Math.round(
           (BITRATE_1080P60 * w * h * fps) / (1920 * 1080 * 60)
@@ -165,6 +167,7 @@ export function recordRealtime({
       return json as RecordResult;
     } finally {
       if (progressTimer) clearInterval(progressTimer);
+      stream?.getTracks().forEach((track) => track.stop());
     }
   })();
 

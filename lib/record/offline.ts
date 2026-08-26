@@ -89,6 +89,7 @@ export function renderOffline({
 }): OfflineRenderer {
   let cancelled = false;
   let session = "";
+  let yieldChannel: MessageChannel | null = null;
   const frameMs = 1000 / fps;
 
   const done = (async (): Promise<OfflineRenderResult | null> => {
@@ -135,9 +136,10 @@ export function renderOffline({
           : null;
       // 同步渲染让循环可能一连几十帧不碰宏任务，UI（进度/取消）会冻死；
       // MessageChannel 是不被 4ms 钳制的宏任务让渡，每帧让一次
-      const yieldChannel = new MessageChannel();
+      const channel = new MessageChannel();
+      yieldChannel = channel;
       let yieldResolve: (() => void) | null = null;
-      yieldChannel.port1.onmessage = () => {
+      channel.port1.onmessage = () => {
         const r = yieldResolve;
         yieldResolve = null;
         r?.();
@@ -145,7 +147,7 @@ export function renderOffline({
       const yieldTask = () =>
         new Promise<void>((r) => {
           yieldResolve = r;
-          yieldChannel.port2.postMessage(0);
+          channel.port2.postMessage(0);
         });
       console.log(
         "[travel-story] 帧驱动:",
@@ -228,6 +230,8 @@ export function renderOffline({
       engine.setRoutesVisible(true);
       engine.setProjection("mercator");
       engine.setAutoProjection(true);
+      yieldChannel?.port1.close();
+      yieldChannel?.port2.close();
       if (cancelled && session) {
         fetch(`/api/recordings/frames?session=${session}`, { method: "DELETE" }).catch(() => {});
       }

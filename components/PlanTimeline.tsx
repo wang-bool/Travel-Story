@@ -12,7 +12,7 @@ import { LandmarkGlyph } from "./LandmarkMarker";
 import { StopMedia } from "./StopMedia";
 import { landmark, refineType } from "@/lib/landmark";
 import { TRANSPORT_META, STOP_TYPE_LABEL } from "@/lib/types";
-import type { Transport, Trip, TripDay, TripStop } from "@/lib/types";
+import type { Transport, Trip, TripStop } from "@/lib/types";
 import { TransportGlyph } from "@/lib/icons";
 
 export function PlanTimeline({
