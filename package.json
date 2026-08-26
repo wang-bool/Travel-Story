@@ -1,0 +1,28 @@
+{
+  "name": "travel-story",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Travel Story — 旅行规划与旅行纪录片生成平台（初版：Plan + 地图动画预览）",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@phosphor-icons/core": "^2.1.1",
+    "@phosphor-icons/react": "^2.1.10",
+    "@turf/turf": "^7.1.0",
+    "maplibre-gl": "^5.0.0",
+    "mp4-muxer": "^5.2.2",
+    "next": "^15.1.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "typescript": "^5.7.0"
+  }
+}

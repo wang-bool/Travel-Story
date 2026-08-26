@@ -1,0 +1,30 @@
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+.DS_Store
+
+# 隔离开发工作树
+.worktrees/
+
+# 日志与测试输出
+*.log
+coverage/
+
+# 编辑器与系统文件
+.vscode/
+.idea/
+Thumbs.db
+
+# 临时文件
+*.tmp
+*.temp
+
+# 本地密钥（.env.example 保留入库）
+.env
+.env.local
+.env.*.local
+
+# 本地瓦片缓存（/api/tiles 磁盘缓存 + 整球 MBTiles，勿入库）
+tile-cache/
+data/

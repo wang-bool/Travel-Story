@@ -37,7 +37,7 @@ Expected: both commands complete without changing either directory.
 
 - [ ] **Step 2: Add ignore rules**
 
-Append:
+Add the following rules and stop ignoring `next-env.d.ts`, which is part of the TypeScript project baseline:
 
 ```gitignore
 # 日志与测试输出
@@ -52,6 +52,9 @@ Thumbs.db
 # 临时文件
 *.tmp
 *.temp
+
+# 隔离开发工作树
+.worktrees/
 ```
 
 - [ ] **Step 3: Delete obsolete screenshots**
@@ -86,11 +89,11 @@ diff -u /tmp/travel-story-tiles-before.txt /tmp/travel-story-tiles-after.txt
 
 Expected: both diffs are empty.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 6: Commit the complete source baseline**
 
 ```bash
-git add .gitignore
-git commit -m "chore: prepare repository hygiene for release"
+git add .env.example .gitignore app components lib next-env.d.ts next.config.ts package.json package-lock.json scripts tsconfig.json 需求文档.md docs
+git commit -m "chore: add Travel Story source baseline"
 ```
 
 ### Task 2: Tested request-safety module

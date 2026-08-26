@@ -1,0 +1,1883 @@
+/* ============================================================
+   Travel Story — 设计系统
+   基调：旅行纪录片 / 编辑杂志
+   - Fraunces（可变衬线）：大标题，有书卷气
+   - Inter：正文（衬线之外的中性选择，行高舒服）
+   - Space Mono：场记字幕（DAY 01 · SHANGHAI / 时间码）
+   ============================================================ */
+
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700;9..144,900&family=Inter:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap");
+
+:root {
+  --paper: #f6f1e4;
+  --paper-2: #efe8d6;
+  --ink: #26211a;
+  --ink-2: #51483a;
+  --muted: #8a7f6c;
+  --line: #d9cdb2;
+  --accent: #e4572e;
+  --accent-2: #c8431f;
+  --teal: #4a7c89;
+  --water: #c9dde3;
+  --shadow: 0 18px 50px -18px rgba(38, 33, 26, 0.35);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  padding: 0;
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+input,
+textarea,
+select {
+  font-family: inherit;
+}
+
+/* 纸纹底噪 */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.5;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.15 0 0 0 0 0.13 0 0 0 0 0.10 0 0 0 0.04 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+.font-display {
+  font-family: "Fraunces", "Songti SC", "STSong", Georgia, serif;
+  font-optical-sizing: auto;
+  font-variation-settings: "opsz" 144;
+  letter-spacing: -0.015em;
+}
+.font-mono {
+  font-family: "Space Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+/* ============================================================
+   按钮
+   ============================================================ */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 20px;
+  border-radius: 999px;
+  border: 1px solid var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: 0.02em;
+  transition: transform 0.18s ease, background 0.18s ease, color 0.18s ease;
+}
+.btn:hover {
+  transform: translateY(-1px);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.btn-ghost {
+  background: transparent;
+  color: var(--ink);
+}
+.btn-ghost:hover {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+}
+.btn-sm {
+  padding: 7px 14px;
+  font-size: 12.5px;
+}
+
+/* ============================================================
+   地图 + 地标标记
+   ============================================================ */
+.map-canvas {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: var(--paper);
+  /* 地标是 HTML overlay：拖出地图视野时必须被裁掉，不能溢出到行程单上 */
+  overflow: hidden;
+}
+.map-fallback {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+.map-canvas .maplibregl-canvas {
+  outline: none;
+}
+.map-canvas .maplibregl-ctrl-attrib {
+  background: rgba(246, 241, 228, 0.8);
+  font-family: "Space Mono", monospace;
+  font-size: 9px;
+}
+.map-canvas .maplibregl-ctrl-attrib a {
+  color: var(--muted);
+}
+
+.ts-markers {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* 底图 国内/国际 切换（地图右上角分段控件） */
+.ts-basemode {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 6;
+  display: flex;
+  border: 1px solid var(--ink);
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--paper);
+  box-shadow: 0 1px 4px rgba(60, 50, 30, 0.18);
+}
+.ts-basemode button {
+  padding: 6px 14px;
+  border: none;
+  background: transparent;
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.ts-basemode button + button {
+  border-left: 1px solid var(--ink);
+}
+.ts-basemode button.on {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.ts-marker {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transition: opacity 0.35s ease, transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+  /* 整体不拦截指针：滚轮/拖动要穿透到地图（名称胶囊常显后面积不小，
+     指针事件被它吃掉会导致滚轮缩放「卡住」）；只有圆形徽章可点 */
+  pointer-events: none;
+  will-change: left, top;
+}
+.ts-marker-shield {
+  display: block;
+  border-radius: 50%;
+  line-height: 0;
+  transition: transform 0.3s cubic-bezier(0.2, 0.9, 0.2, 1);
+  pointer-events: auto;
+  cursor: pointer;
+}
+.ts-marker[data-active] .ts-marker-shield {
+  transform: scale(1.18);
+}
+.ts-marker-day {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-family: "Space Mono", monospace;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  border: 2px solid var(--paper);
+  line-height: 1.4;
+}
+/* 行程点名称：主要内容，常驻显示、加粗醒目，压过所有底图信息 */
+.ts-marker-name {
+  margin-top: 5px;
+  padding: 3px 10px;
+  background: rgba(246, 241, 228, 0.97);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  border: 1.5px solid rgba(38, 33, 26, 0.85);
+  border-radius: 6px;
+  white-space: nowrap;
+  box-shadow: 0 3px 10px rgba(38, 33, 26, 0.2);
+}
+
+.ts-marker-pulse {
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  width: 44px;
+  height: 44px;
+  margin-left: -22px;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  animation: tspulse 2.2s ease-out infinite;
+  pointer-events: none;
+}
+@keyframes tspulse {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(1.9);
+    opacity: 0;
+  }
+}
+
+/* ============================================================
+   场记卡（播放中）
+   ============================================================ */
+.slate {
+  position: absolute;
+  left: 48px;
+  bottom: 48px;
+  z-index: 20;
+  color: var(--paper);
+  pointer-events: none;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.5);
+}
+.slate .kicker {
+  font-family: "Space Mono", monospace;
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  opacity: 1;
+  margin-bottom: 10px;
+  color: #fffdf7;
+  /* 底图是浅暖色，纸色小字直接压上去会看不清：垫深色胶囊，对比拉满；
+     block + fit-content：胶囊收缩到内容宽，且独占一行（段场记标题是
+     inline-flex，inline-block 会被它拉到同一行） */
+  display: block;
+  width: fit-content;
+  background: rgba(15, 13, 10, 0.68);
+  padding: 6px 10px 6px 13px; /* letter-spacing 尾巴空隙用左 padding 找齐 */
+  border-radius: 7px;
+}
+.slate .title {
+  font-family: "Fraunces", serif;
+  font-weight: 600;
+  font-size: clamp(40px, 6vw, 84px);
+  line-height: 0.98;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+.slate .sub {
+  margin-top: 14px;
+  font-family: "Space Mono", monospace;
+  font-size: 13px;
+  letter-spacing: 0.2em;
+  opacity: 0.82;
+}
+
+/* 段场记：A —载具→ B（载具大图标嵌在箭头正中） */
+.slate .title.seg-route {
+  display: inline-flex;
+  align-items: center;
+  gap: 20px;
+}
+.seg-arrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.seg-arrow-line {
+  width: 40px;
+  height: 2px;
+  background: rgba(246, 241, 228, 0.85);
+}
+.seg-arrow-head {
+  width: 12px;
+  height: 14px;
+  background: rgba(246, 241, 228, 0.85);
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+/* 段场记载具图标：上下抖动 + 左右摆动 */
+.seg-arrow-icon {
+  display: inline-flex;
+  animation: seg-icon-bob 1.1s ease-in-out infinite;
+}
+@keyframes seg-icon-bob {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  30% { transform: translate(2px, -6px) rotate(-4deg); }
+  60% { transform: translate(-2px, 1px) rotate(3deg); }
+}
+
+/* 章节卡：暗色蒙板压全场（遮个七七八八），DAY 居中，淡入淡出 */
+.day-mask {
+  position: absolute;
+  inset: 0;
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 13, 10, 0.78);
+  color: var(--paper);
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+  animation: day-mask-fade 1.6s ease both; /* 与 playback 的 DAY_CARD_MS 一致 */
+}
+.day-mask-inner {
+  text-align: center;
+}
+.day-mask-inner .kicker {
+  font-family: "Space Mono", monospace;
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  opacity: 1;
+  color: #fffdf7;
+  margin-bottom: 14px;
+}
+.day-mask-title {
+  font-family: "Fraunces", serif;
+  font-weight: 600;
+  font-size: clamp(64px, 10vw, 128px);
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+@keyframes day-mask-fade {
+  0% { opacity: 0; }
+  20% { opacity: 1; }
+  80% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* ============================================================
+   滚动条
+   ============================================================ */
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 99px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ============================================================
+   动画
+   ============================================================ */
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.fade-up {
+  animation: fadeUp 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+/* ============================================================
+   通用
+   ============================================================ */
+.muted {
+  color: var(--muted);
+}
+.accent {
+  color: var(--accent);
+}
+.kicker {
+  font-family: "Space Mono", monospace;
+  font-size: 11px;
+  letter-spacing: 0.32em;
+  color: var(--muted);
+}
+.notfound {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  gap: 20px;
+  text-align: center;
+}
+
+/* ============================================================
+   首页
+   ============================================================ */
+.home {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+}
+
+/* ---- 首屏：整幅旋转地球 ---- */
+.hero-stage {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.hero-globe {
+  position: absolute;
+  inset: 0;
+}
+/* 纸色纱罩：顶部与左侧压一层纸色保证 slogan 可读，
+   底部渐变融入页面底色，地球从纸里「长」出来而不是贴上去 */
+.hero-veil {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(to right, rgba(246, 241, 228, 0.72) 0%, rgba(246, 241, 228, 0.25) 42%, transparent 68%),
+    linear-gradient(to bottom, rgba(246, 241, 228, 0.5) 0%, rgba(246, 241, 228, 0.06) 30%, rgba(246, 241, 228, 0.12) 62%, var(--paper) 98%);
+}
+.hero-inner {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 32px 48px 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.home-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.brand-mark {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--ink);
+}
+.brand-text {
+  font-weight: 700;
+  letter-spacing: 0.28em;
+  font-size: 13px;
+}
+.home-nav {
+  display: flex;
+  gap: 28px;
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.2em;
+}
+.hero {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 40px 0 96px;
+  max-width: 820px;
+}
+.hero .kicker {
+  margin-bottom: 22px;
+}
+.hero-title {
+  font-size: clamp(48px, 7vw, 96px);
+  font-weight: 600;
+  line-height: 1.02;
+  margin: 0 0 28px;
+}
+.hero-sub {
+  font-size: 18px;
+  color: var(--ink-2);
+  line-height: 1.7;
+  max-width: 560px;
+}
+.hero-actions {
+  margin-top: 38px;
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.hero-actions .icon {
+  flex: none;
+}
+
+/* ============================================================
+   三动作图标的悬停动画
+   ============================================================ */
+/* 大门：悬停时门扇绕左侧合页透视旋开，门内透出暖光 */
+.icon-door .door-panel {
+  transform-box: fill-box;
+  transform-origin: left center;
+  transition: transform 0.45s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.icon-door .door-light {
+  opacity: 0;
+  transition: opacity 0.4s ease 0.12s;
+}
+.btn:hover .icon-door .door-panel {
+  transform: perspective(70px) rotateY(-56deg);
+}
+.btn:hover .icon-door .door-light {
+  opacity: 0.45;
+}
+
+/* 笔和纸：悬停时笔来回走字，纸上三行内容依次写出来 */
+.icon-pen .pen-body {
+  transform-box: fill-box;
+}
+.icon-pen .wl {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  transition: stroke-dashoffset 0.55s ease;
+}
+.btn:hover .icon-pen .pen-body {
+  animation: penWrite 0.9s ease-in-out infinite;
+}
+.btn:hover .icon-pen .wl {
+  stroke-dashoffset: 0;
+}
+.btn:hover .icon-pen .wl-2 {
+  transition-delay: 0.18s;
+}
+.btn:hover .icon-pen .wl-3 {
+  transition-delay: 0.36s;
+}
+@keyframes penWrite {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  25% { transform: translate(-1.3px, 1px) rotate(-7deg); }
+  50% { transform: translate(0.5px, 2px) rotate(5deg); }
+  75% { transform: translate(-0.9px, 3px) rotate(-4deg); }
+}
+
+/* 脚印：悬停时左右脚交替迈步（一抬一落） */
+.btn:hover .icon-feet .foot-l {
+  animation: stepL 0.72s ease-in-out infinite;
+}
+.btn:hover .icon-feet .foot-r {
+  animation: stepR 0.72s ease-in-out infinite;
+}
+@keyframes stepL {
+  0%, 100% { opacity: 1; transform: translate(0, 0); }
+  50% { opacity: 0.25; transform: translate(1.2px, -1.6px); }
+}
+@keyframes stepR {
+  0%, 100% { opacity: 0.25; transform: translate(1.2px, -1.6px); }
+  50% { opacity: 1; transform: translate(0, 0); }
+}
+
+/* ---- 足迹模式：hero 内容与纱罩淡出，地球滑到左边 ---- */
+.hero-inner,
+.hero-veil {
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+.hero-stage.footprints-mode .hero-inner {
+  opacity: 0;
+  transform: translateY(-24px);
+  pointer-events: none;
+}
+.hero-stage.footprints-mode .hero-veil {
+  opacity: 0;
+}
+
+/* 足迹模式顶栏：标题 + 关闭按钮，迟一点入场（等地球先滑过去） */
+.fp-top {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 8;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 28px 40px;
+  opacity: 0;
+  transform: translateY(-10px);
+  pointer-events: none;
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+.hero-stage.footprints-mode .fp-top {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+  transition-delay: 0.35s;
+}
+.fp-title .kicker {
+  margin: 0;
+}
+.fp-title h2 {
+  font-size: 40px;
+  font-weight: 600;
+  margin: 6px 0 0;
+}
+.fp-close {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: rgba(246, 241, 228, 0.85);
+  font-size: 22px;
+  line-height: 1;
+  color: var(--ink-2);
+  transition: border-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+.fp-close:hover {
+  border-color: var(--ink);
+  color: var(--ink);
+  transform: rotate(90deg);
+}
+
+/* 右侧统计面板：从右边滑入 */
+/* 右侧统计面板：从右边滑入；纸色渐变衬底——地球放大后从文字
+   下面穿过去时，数字依然清晰（文字永远在球体之上） */
+.fp-panel {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 42%;
+  z-index: 7;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0 56px 0 72px;
+  background: linear-gradient(to left, var(--paper) 42%, rgba(246, 241, 228, 0.55) 72%, transparent);
+  opacity: 0;
+  transform: translateX(36px);
+  pointer-events: none;
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+.hero-stage.footprints-mode .fp-panel {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+  transition-delay: 0.5s;
+}
+.fp-panel-lead {
+  font-size: 11px;
+  letter-spacing: 0.3em;
+  margin: 0 0 8px;
+}
+.fp-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 26px 20px;
+  margin-top: 20px;
+}
+.fp-num {
+  display: block;
+  font-size: 54px;
+  font-weight: 600;
+  line-height: 1;
+}
+.fp-label {
+  display: block;
+  margin-top: 7px;
+  font-family: "Space Mono", monospace;
+  font-size: 11.5px;
+  letter-spacing: 0.18em;
+  color: var(--muted);
+}
+.fp-hint {
+  margin: 42px 0 0;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  line-height: 1.9;
+  color: var(--muted);
+}
+
+/* ---- 第二屏：旅行记录（满屏，点按钮滑上来）---- */
+.home-body {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px 48px 64px;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+/* trips 区撑满整屏，页脚钉在屏底 */
+.home-body .trips {
+  flex: 1;
+}
+.home-body .home-foot {
+  margin-top: 48px;
+}
+.trips-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: 20px 0 24px;
+  border-top: 1px solid var(--line);
+  padding-top: 28px;
+}
+.trips-head h2 {
+  font-size: 28px;
+  font-weight: 600;
+  margin: 0;
+}
+.trips-head-right {
+  display: flex;
+  align-items: baseline;
+  gap: 18px;
+}
+.trips-globe-link {
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  color: var(--teal);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+.trips-globe-link:hover {
+  color: var(--accent);
+}
+.empty {
+  padding: 60px 0;
+  text-align: center;
+  color: var(--muted);
+  display: grid;
+  gap: 18px;
+  justify-items: center;
+}
+.trip-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 24px;
+}
+.trip-card {
+  background: #fffdf7;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow: hidden;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+  position: relative;
+  /* 定高：封面 + 固定行数的正文，卡片整齐划一；长文一律截断 */
+  height: 336px;
+  display: flex;
+  flex-direction: column;
+}
+.trip-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow);
+}
+.trip-card-cover {
+  flex: none;
+  height: 130px;
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 14px 16px;
+}
+.trip-card-no {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+}
+.trip-card-days {
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  background: rgba(0, 0, 0, 0.25);
+  padding: 3px 9px;
+  border-radius: 99px;
+}
+.trip-card-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 18px 20px 22px;
+}
+.trip-card-body h3 {
+  font-size: 22px;
+  font-weight: 600;
+  margin: 0 0 6px;
+  /* 标题单行省略（全文见悬停提示） */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.trip-card-meta {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  margin-bottom: 12px;
+  /* 日期/备注单行省略（全文见悬停提示） */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* 无备注也占位一行，卡片内容区高度一致 */
+.trip-card-desc {
+  min-height: 1.55em;
+}
+.trip-card-stops {
+  font-size: 13px;
+  color: var(--ink-2);
+  line-height: 1.5;
+  /* 地点列表固定两行，超出省略（全文见悬停提示） */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.trip-card-delete {
+  /* 钉在卡片底部：margin auto 吃掉上面余量，与左侧文字对齐 */
+  margin-top: auto;
+  align-self: flex-start;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  padding: 12px 0 0;
+}
+.trip-card-delete:hover {
+  color: var(--accent);
+}
+.home-foot {
+  margin-top: 80px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  color: var(--muted);
+}
+
+/* ============================================================
+   地球仪（首页 hero 背景 + 我的足迹页）
+   ============================================================ */
+.globe {
+  position: absolute;
+  inset: 0;
+}
+/* 注意：MapLibre 会给容器加 .maplibregl-map（position:relative），
+   同优先级且后加载会压过这里——用子选择器把优先级提上去 */
+.globe > .globe-canvas {
+  position: absolute;
+  inset: 0;
+}
+.globe-canvas .maplibregl-canvas {
+  outline: none;
+}
+/* 首页背景的 attribution 压到最不显眼 */
+.hero-globe .maplibregl-ctrl-attrib {
+  opacity: 0.45;
+  font-size: 9px;
+  background: transparent;
+}
+
+/* 小红旗层：整体不拦截指针（拖拽/滚动穿透给地球），旗子本身可点。
+   默认隐藏，足迹模式（.on）淡入 */
+.globe-flags {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 5;
+  opacity: 0;
+  transition: opacity 0.55s ease;
+}
+.globe-flags.on {
+  opacity: 1;
+  /* 等地球滑到位再淡入 */
+  transition-delay: 0.55s;
+}
+.globe-flag {
+  position: absolute;
+  /* 旗杆尖端落在坐标点上（svg 22x30，杆底约在 x=3,y=29） */
+  transform: translate(-3px, -29px);
+  line-height: 0;
+  filter: drop-shadow(0 2px 4px rgba(38, 33, 26, 0.3));
+  /* 纯展示，不吃指针 */
+  pointer-events: none;
+}
+
+/* ============================================================
+   窄屏适配
+   ============================================================ */
+@media (max-width: 720px) {
+  .hero-inner {
+    padding: 24px 24px 0;
+  }
+  .hero {
+    padding-bottom: 72px;
+  }
+  .home-body {
+    padding: 20px 24px 48px;
+  }
+  .fp-top {
+    padding: 16px 20px;
+  }
+  .fp-title h2 {
+    font-size: 28px;
+  }
+  /* 窄屏足迹面板：地球保持居中，统计从底部滑上来 */
+  .fp-panel {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    padding: 20px 24px 28px;
+    background: linear-gradient(to top, var(--paper) 55%, transparent);
+    transform: translateY(28px);
+  }
+  .hero-stage.footprints-mode .fp-panel {
+    transform: none;
+  }
+  .fp-stats {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px 12px;
+  }
+  .fp-num {
+    font-size: 34px;
+  }
+  .fp-hint {
+    margin-top: 22px;
+  }
+}
+
+/* ============================================================
+   创建旅行 Modal
+   ============================================================ */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(38, 33, 26, 0.45);
+  backdrop-filter: blur(6px);
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+.modal-card {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  width: 100%;
+  max-width: 520px;
+  padding: 32px;
+  box-shadow: var(--shadow);
+}
+.modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 28px;
+  line-height: 1;
+  color: var(--muted);
+}
+.modal-close:hover {
+  color: var(--ink);
+}
+.modal-title {
+  font-size: 30px;
+  font-weight: 600;
+  margin: 10px 0 24px;
+}
+.field {
+  display: block;
+  margin-bottom: 18px;
+}
+.field span {
+  display: block;
+  font-size: 11px;
+  font-family: "Space Mono", monospace;
+  letter-spacing: 0.2em;
+  color: var(--muted);
+  margin-bottom: 7px;
+  text-transform: uppercase;
+}
+.field input,
+.field textarea {
+  width: 100%;
+  padding: 11px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fffdf7;
+  font-size: 15px;
+  color: var(--ink);
+}
+.field textarea {
+  resize: vertical;
+  min-height: 88px;
+  line-height: 1.6;
+}
+.field input:focus,
+.field textarea:focus {
+  outline: none;
+  border-color: var(--ink);
+}
+.field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 24px;
+}
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ============================================================
+   规划页
+   ============================================================ */
+.plan {
+  position: relative;
+  z-index: 1;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+.plan-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 28px;
+  background: rgba(246, 241, 228, 0.9);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--line);
+  gap: 20px;
+}
+.topbar-back {
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  color: var(--muted);
+}
+.topbar-back:hover {
+  color: var(--ink);
+}
+.topbar-title {
+  flex: 1;
+  text-align: center;
+}
+.topbar-title .kicker {
+  display: block;
+  font-size: 10px;
+}
+.topbar-title h1 {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 2px 0 0;
+}
+.topbar-play {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.topbar-play:hover {
+  background: var(--accent-2);
+  border-color: var(--accent-2);
+}
+
+.plan-body {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 400px 1fr;
+  min-height: 0;
+}
+.plan-sidebar {
+  border-right: 1px solid var(--line);
+  overflow-y: auto;
+  background: var(--paper-2);
+}
+.plan-map {
+  position: relative;
+  min-width: 0;
+}
+
+/* Timeline */
+.timeline {
+  padding: 24px 22px 40px;
+}
+.day-block {
+  margin-bottom: 8px;
+  padding: 18px 16px 14px;
+  background: #fffdf7;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+.day-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.day-label {
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.22em;
+  color: var(--ink);
+}
+.day-date {
+  margin-left: 10px;
+  font-size: 10px;
+  letter-spacing: 0.15em;
+}
+.day-remove {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 12px;
+}
+.day-remove:hover {
+  color: var(--accent);
+}
+.stop-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.stop-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background 0.15s, border-color 0.15s;
+}
+.stop-card:hover {
+  background: var(--paper);
+}
+.stop-card.active {
+  background: var(--paper);
+  border-color: var(--ink);
+}
+.stop-handle {
+  color: var(--line);
+  font-size: 14px;
+  letter-spacing: -2px;
+  cursor: grab;
+}
+.stop-glyph {
+  line-height: 0;
+}
+.stop-info {
+  flex: 1;
+  min-width: 0;
+}
+.stop-name {
+  display: block;
+  font-weight: 600;
+  font-size: 14.5px;
+}
+.stop-meta {
+  display: block;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  margin-top: 2px;
+}
+.stop-remove {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 20px;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.stop-card:hover .stop-remove {
+  opacity: 1;
+}
+.stop-remove:hover {
+  color: var(--accent);
+}
+
+.segment {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0 6px 26px;
+  /* 交通方式面板以此为定位锚：段行通宽，面板左对齐不会被侧栏裁掉 */
+  position: relative;
+}
+.segment-line {
+  flex: 1;
+  height: 1px;
+  background: repeating-linear-gradient(
+    to right,
+    var(--line) 0 4px,
+    transparent 4px 8px
+  );
+}
+/* 紧凑交通方式选择器：一颗胶囊 + 弹出网格面板 */
+.tspick {
+  /* 面板定位锚在 .segment 上（通宽行），这里保持 static */
+  position: static;
+}
+.tspick-current {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 11px;
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  background: var(--paper);
+  color: var(--ink-2);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.tspick-current:hover {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+.tspick-caret {
+  font-size: 8.5px;
+  color: var(--muted);
+}
+.tspick-pop {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  /* 锚在 .segment（通宽行）左缘，保证 4 列面板完整落在侧栏内 */
+  left: 0;
+  z-index: 40;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 2px;
+  background: #fffdf7;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 7px;
+  box-shadow: var(--shadow);
+  /* 极端矮窗口的兜底：超高就滚动 */
+  max-height: min(320px, calc(100vh - 140px));
+  overflow-y: auto;
+}
+/* 上方空间不足时向下开 */
+.tspick-pop.down {
+  bottom: auto;
+  top: calc(100% + 8px);
+}
+.tspick-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 54px;
+  padding: 8px 6px 7px;
+  border: none;
+  background: none;
+  border-radius: 9px;
+  font-size: 10.5px;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.tspick-item:hover {
+  background: var(--paper);
+  color: var(--ink);
+}
+.tspick-item.active {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.add-stop {
+  margin-top: 10px;
+}
+
+/* 地点素材条：缩略图 + 上传按钮，贴在地点卡片下方 */
+.stop-media {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px 8px 26px;
+  margin-top: -4px;
+}
+.stop-media-thumb {
+  position: relative;
+  width: 42px;
+  height: 42px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+.stop-media-thumb:hover {
+  transform: scale(1.06);
+}
+.stop-media-thumb img,
+.stop-media-thumb video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.stop-media-loading {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  color: var(--muted);
+  font-size: 12px;
+}
+.stop-media-play {
+  position: absolute;
+  top: 2px;
+  right: 3px;
+  font-size: 8px;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+}
+.stop-media-del {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 16px;
+  height: 16px;
+  border: none;
+  background: rgba(38, 33, 26, 0.75);
+  color: var(--paper);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.stop-media-thumb:hover .stop-media-del {
+  opacity: 1;
+}
+.stop-media-add {
+  padding: 5px 10px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  background: none;
+  color: var(--muted);
+  font-size: 11px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.stop-media-add:hover {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+.add-stop-btn,
+.add-day-btn {
+  width: 100%;
+  margin-top: 10px;
+  padding: 11px;
+  background: transparent;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.15s;
+}
+.add-stop-btn:hover,
+.add-day-btn:hover {
+  border-color: var(--ink);
+  color: var(--ink);
+  background: var(--paper);
+}
+.add-day-btn {
+  margin-top: 16px;
+  border-style: solid;
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+}
+.add-day-btn:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+/* 地点搜索 */
+.search {
+  position: relative;
+}
+.search-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--ink);
+  border-radius: 10px;
+  background: #fffdf7;
+  font-size: 14px;
+}
+.search-input:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(228, 87, 46, 0.15);
+}
+.search-hint {
+  padding: 10px 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.search-results {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 6px;
+  background: #fffdf7;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  max-height: 320px;
+  overflow-y: auto;
+  box-shadow: var(--shadow);
+  position: absolute;
+  z-index: 30;
+  width: 100%;
+}
+/* 输入框靠近视口底部时，结果框朝上展开（见 PlaceSearch 的 dropUp） */
+.search-results.up {
+  top: auto;
+  bottom: calc(100% + 8px);
+  margin: 0;
+}
+.search-results li {
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 3px 10px;
+  align-items: baseline;
+}
+.search-results li.active,
+.search-results li:hover {
+  background: var(--paper);
+}
+.search-name {
+  font-weight: 600;
+  font-size: 14px;
+}
+.search-addr {
+  grid-column: 1;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.search-type {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  font-size: 10px;
+  font-family: "Space Mono", monospace;
+  padding: 2px 8px;
+  background: var(--ink);
+  color: var(--paper);
+  border-radius: 99px;
+  align-self: center;
+}
+
+.map-legend {
+  position: absolute;
+  right: 56px;
+  bottom: 16px;
+  z-index: 8;
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  color: var(--ink-2);
+  background: rgba(246, 241, 228, 0.85);
+  padding: 6px 12px;
+  border-radius: 99px;
+}
+.map-legend .dot {
+  display: inline-block;
+  width: 18px;
+  height: 2.5px;
+  margin-right: 5px;
+  vertical-align: middle;
+}
+.dot-traveled {
+  background: var(--accent);
+}
+
+/* ============================================================
+   播放页
+   ============================================================ */
+.play {
+  position: fixed;
+  inset: 0;
+  background: #0f0d0a;
+  z-index: 50;
+  overflow: hidden;
+}
+.play .map-canvas {
+  background: #0f0d0a;
+}
+/* 播前预热蒙板：预热时镜头沿全程跳走，压住画面 + 说明（不挡顶部退出按钮） */
+.play-prewarm {
+  position: absolute;
+  inset: 0;
+  z-index: 25;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 12px;
+  text-align: center;
+  color: var(--paper);
+  background: rgba(15, 13, 10, 0.66);
+  backdrop-filter: blur(6px);
+}
+.play-prewarm .kicker {
+  color: rgba(246, 241, 228, 0.65);
+  margin: 0;
+}
+.play-prewarm h2 {
+  font-size: 30px;
+  font-weight: 600;
+  margin: 0;
+}
+.play-prewarm p {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.8;
+  color: rgba(246, 241, 228, 0.78);
+  max-width: 400px;
+}
+.play-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 6;
+  background: radial-gradient(
+    ellipse at center,
+    transparent 40%,
+    rgba(0, 0, 0, 0.55) 100%
+  );
+}
+.play-top {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 22px 32px;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.5), transparent);
+}
+.play-exit {
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: #fff;
+  padding: 8px 16px;
+  border-radius: 99px;
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  backdrop-filter: blur(6px);
+}
+.play-exit:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+.play-progress {
+  flex: 1;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.play-progress-bar {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.5s ease;
+}
+.play-counter {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+}
+.play-end {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 16px;
+  text-align: center;
+  color: var(--paper);
+  background: rgba(15, 13, 10, 0.72);
+  backdrop-filter: blur(8px);
+}
+.play-end .kicker {
+  color: rgba(255, 255, 255, 0.65);
+}
+.play-end h2 {
+  font-family: "Fraunces", serif;
+  font-size: 56px;
+  font-weight: 600;
+  margin: 0;
+}
+.play-end-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 14px;
+}
+.play-end .btn-ghost {
+  color: var(--paper);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+.play-end .btn-ghost:hover {
+  background: var(--paper);
+  color: var(--ink);
+  border-color: var(--paper);
+}
+.play-empty {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  gap: 16px;
+  color: var(--paper);
+  background: #0f0d0a;
+  text-align: center;
+}
+
+/* 录制监视器：输出画布上屏，所见即所得（画布只在录制时挂进来） */
+.rec-monitor {
+  position: absolute;
+  inset: 0;
+  z-index: 15;
+  display: none;
+  background: #0f0d0a;
+}
+.rec-monitor.on {
+  display: block;
+}
+.rec-monitor canvas {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* ============================================================
+   纪录片录制页
+   ============================================================ */
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.rec-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  color: #fff;
+}
+.rec-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #e4572e;
+  animation: recBlink 1.1s steps(2, start) infinite;
+}
+@keyframes recBlink {
+  50% { opacity: 0.15; }
+}
+.rec-card {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 25;
+  width: min(480px, calc(100vw - 48px));
+  /* 视口太矮时卡片内部滚动，永远不出屏幕 */
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  padding: 32px 36px;
+  background: rgba(15, 13, 10, 0.82);
+  border: 1px solid rgba(246, 241, 228, 0.22);
+  border-radius: 18px;
+  color: var(--paper);
+  text-align: center;
+  backdrop-filter: blur(10px);
+}
+/* 通用 fadeUp 的 transform 会覆盖居中定位（填充模式 both 定格在 translateY(0)），
+   居中卡片用带居中的专用关键帧 */
+.rec-card.fade-up {
+  animation: fadeUpCentered 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes fadeUpCentered {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 14px));
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+}
+.rec-card .kicker {
+  color: rgba(246, 241, 228, 0.65);
+  margin: 0 0 10px;
+}
+.rec-card h2 {
+  font-size: 34px;
+  font-weight: 600;
+  margin: 0 0 14px;
+}
+.rec-card-info {
+  font-size: 13.5px;
+  line-height: 1.8;
+  color: rgba(246, 241, 228, 0.78);
+  margin: 0 0 22px;
+}
+.rec-card-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.rec-card .btn-ghost {
+  color: var(--paper);
+  border-color: rgba(246, 241, 228, 0.4);
+}
+.rec-card .btn-ghost:hover {
+  background: var(--paper);
+  color: var(--ink);
+  border-color: var(--paper);
+}
+
+/* 预热 / 转码的醒目提示卡：录制中这两步监视器没有画面进展，
+   居中大字 + 转圈告诉用户进行到哪、还要等多久（不挡顶部取消按钮） */
+.rec-notice {
+  width: min(420px, calc(100vw - 48px));
+}
+.rec-notice h2 {
+  font-size: 28px;
+}
+.rec-notice .rec-card-info {
+  margin-bottom: 4px;
+}
+.rec-spin {
+  display: inline-block;
+  width: 26px;
+  height: 26px;
+  margin-bottom: 16px;
+  border-radius: 50%;
+  border: 3px solid rgba(246, 241, 228, 0.22);
+  border-top-color: var(--accent);
+  animation: rec-spin 0.9s linear infinite;
+}
+@keyframes rec-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 竖屏录制：地图容器收成 9:16 居中——cameraForBounds 按容器取景，
+   取景范围与输出画幅一致，地图源分辨率全程用满，不靠裁切 */
+.play.rec-portrait {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.play.rec-portrait .map-canvas {
+  flex: none;
+  width: auto;
+  height: 100%;
+  aspect-ratio: 9 / 16;
+}
+
+/* 输出选项（画幅 / 清晰度 / 流畅度） */
+.rec-opt {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: 0 0 12px;
+}
+.rec-opt-label {
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  color: rgba(246, 241, 228, 0.55);
+  width: 3.5em;
+  text-align: right;
+  flex: none;
+}
+.rec-formats {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+.rec-card > .btn {
+  margin-top: 10px;
+}
+.rec-formats button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 20px;
+  background: transparent;
+  border: 1px solid rgba(246, 241, 228, 0.35);
+  border-radius: 10px;
+  color: var(--paper);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.rec-formats button:hover {
+  border-color: rgba(246, 241, 228, 0.7);
+}
+.rec-formats button.on {
+  border-color: var(--accent);
+  background: rgba(228, 87, 46, 0.16);
+}
+.rec-format-sub {
+  font-size: 10.5px;
+  font-weight: 400;
+  color: rgba(246, 241, 228, 0.6);
+}
