@@ -143,4 +143,4 @@ npm run dev                     # 打开 http://localhost:3000
   </tr>
 </table>
 
-<!-- 群二维码更新提示：原图有效期到 2026-08-21 已过期，请通过公众号获取新入群方式，替换 public/readme/wechat-group.png 后即自动更新。 -->
+> 如果群二维码过期，可以关注微信公众号获取入群方式，或添加作者微信：`wang_bool`。
