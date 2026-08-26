@@ -94,7 +94,9 @@ npm run dev                     # 打开 http://localhost:3000
 
 ## 关注与交流
 
-如果你对旅行影片、自部署或地图动画感兴趣，欢迎关注公众号或加入交流群。
+对本项目有任何疑问或想法，都欢迎进群探讨。
+
+如果你对 **AI**、**AI Coding** 或 **Agent** 感兴趣，欢迎关注公众号、进群一起交流。
 
 <table>
   <tr>
@@ -103,7 +105,7 @@ npm run dev                     # 打开 http://localhost:3000
       <br />公众号
     </td>
     <td align="center">
-      <img src="./public/readme/wechat-group.png" width="240" alt="Travel Story 交流群二维码" />
+      <img src="./public/readme/wechat-group.png" width="240" alt="AI / AI Coding / Agent 交流群二维码" />
       <br />交流群
     </td>
   </tr>
