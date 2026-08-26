@@ -10,12 +10,23 @@
 // ============================================================
 
 import { promises as fs } from "fs";
+import { randomUUID } from "node:crypto";
 import path from "path";
 
 export const DATA_DIR = path.join(process.cwd(), "data");
 const TRIPS_FILE = path.join(DATA_DIR, "trips.json");
 const MEDIA_DIR = path.join(DATA_DIR, "media");
 export const RECORDINGS_DIR = path.join(DATA_DIR, "recordings");
+
+async function writeFileAtomic(file: string, data: string | Buffer): Promise<void> {
+  const tmp = `${file}.${process.pid}-${randomUUID()}.tmp`;
+  try {
+    await fs.writeFile(tmp, data);
+    await fs.rename(tmp, file);
+  } finally {
+    await fs.unlink(tmp).catch(() => {});
+  }
+}
 
 export async function ensureDirs() {
   await fs.mkdir(DATA_DIR, { recursive: true });
@@ -39,9 +50,7 @@ export async function readTripsDB(): Promise<{ trips: unknown[] }> {
 
 export async function writeTripsDB(db: { trips: unknown[] }): Promise<void> {
   await ensureDirs();
-  const tmp = `${TRIPS_FILE}.tmp`;
-  await fs.writeFile(tmp, JSON.stringify(db), "utf-8");
-  await fs.rename(tmp, TRIPS_FILE);
+  await writeFileAtomic(TRIPS_FILE, JSON.stringify(db));
 }
 
 // ------------------------------------------------------------
@@ -69,8 +78,8 @@ function sidecarPath(id: string) {
 
 export async function writeMedia(id: string, buf: Buffer, meta: MediaSidecar): Promise<void> {
   await ensureDirs();
-  await fs.writeFile(mediaPath(id), buf);
-  await fs.writeFile(sidecarPath(id), JSON.stringify(meta), "utf-8");
+  await writeFileAtomic(mediaPath(id), buf);
+  await writeFileAtomic(sidecarPath(id), JSON.stringify(meta));
 }
 
 export async function readMedia(
