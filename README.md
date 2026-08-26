@@ -1,157 +1,92 @@
 # Travel Story
 
-Travel Story 是一个面向个人使用的旅行规划与旅行纪录片生成工具。你可以先按天安排地点和交通方式，旅行回来后为地点补充照片与视频，再让地图动画、字幕和素材合成一段旅行影片。
+> 把你的旅行，变成一部带地图动画与字幕的纪录片。
 
-项目按单用户自部署方式开发。它没有账号系统，也没有多用户数据隔离，适合运行在自己的电脑、家庭服务器或可信局域网中。
+Travel Story 是一个面向个人使用的旅行规划与旅行影片生成工具：出发前按天安排地点和交通方式，旅行结束后为地点补上照片和视频，再让地图镜头、路线、载具和字幕沿时间线自动合成一段旅行影片。
 
-## 项目截图
+它以单用户自部署方式运行，适合跑在自己的电脑、家庭服务器或可信局域网里。
 
-README 预留以下截图。截图文件补齐后放入 `public/readme/`，建议使用 1600 × 900 像素，并使用不含私人信息的演示行程。
+## 项目展示
 
-| 文件名 | 内容 |
-| --- | --- |
-| `01-home.png` | 首页首屏、地球和主要入口 |
-| `02-trip-list.png` | 三至四条演示行程 |
-| `03-trip-planner.png` | 时间线、地点和地图路线 |
-| `04-story-playback.png` | 地图动画、路线和字幕 |
-| `05-story-export.png` | 录制或导出选项，可选 |
+<div align="center">
+  <img src="./public/readme/cover.png" alt="Travel Story 首页：全球足迹与旅行列表" width="100%" />
+</div>
 
-新截图尚未加入仓库，因此这里不引用不存在的图片。
+<div align="center">
+  从一个想法，到一条路线，再到一部影片 —— 一次旅行，一颗星球。
+</div>
 
-## 已实现功能
+<p align="center">
+  <img src="./public/readme/story-movie.gif" alt="旅行影片：地图镜头沿时间线播放" width="85%" />
+</p>
 
-### Plan 旅行规划
+<table>
+  <tr>
+    <td align="center">
+      <img src="./public/readme/plan-timeline.png" alt="旅行规划：按天的时间线与地图路线" width="100%" />
+      <br /><sub>规划 · 按天排行程，选交通方式</sub>
+    </td>
+    <td align="center">
+      <img src="./public/readme/story-export.png" alt="旅行影片：选择画幅、分辨率和帧率" width="100%" />
+      <br /><sub>成片 · 输出画幅、分辨率与帧率</sub>
+    </td>
+  </tr>
+</table>
 
-- 创建、编辑和删除旅行
-- 按日期维护 Day 和地点
-- 使用高德与 LocationIQ 搜索国内外地点
-- 选择汽车、步行、自行车、火车、飞机、轮船等交通方式
-- 计算道路路线、步行路线、骑行路线和大圆航线
-- 在国内与国际底图之间切换
-- 查看全球足迹
+## 项目情况
 
-### Record 旅行记录
+### 它是什么
 
-- 为每个地点上传照片和视频
-- 将素材保存在部署机器的 `data/media/`
-- 在浏览器中预览地点素材
-- 对视频请求提供 Range 响应
+一段旅行做成一部影片，通常要攒素材、剪辑、配字幕，成本不小。Travel Story 把这条链路压缩成三步：**Plan 规划 → Record 记录 → Story 成片**。路线、载具、字幕、素材都由行程数据驱动，改动地点或素材，影片随之更新，省掉大量手工剪辑。
 
-### Story 旅行影片
+### 核心流程
 
-- 按行程顺序播放地图镜头、路线和载具动画
-- 将地图、地点字幕、照片和视频合成到画布
-- 输出横屏 16:9 或竖屏 9:16
-- 选择 720p 或 1080p
-- 选择 30 FPS 或 60 FPS
-- 使用浏览器 MediaRecorder 实时录制
-- 使用 WebCodecs 或 JPEG 帧序列进行离线渲染
-- 通过 FFmpeg 转码或合成 MP4
-- 在支持的 NVIDIA 环境中尝试 NVENC 编码，失败后回退到 libx264
+1. **Plan** — 创建旅行，按天加入地点，为相邻地点选择汽车、步行、自行车、火车、飞机、轮船等交通方式，地图上实时画出路线。
+2. **Record** — 旅行回来后，为每个地点上传照片或视频，素材保存在部署机器上，浏览器即可预览。
+3. **Story** — 选择横/竖屏与分辨率，地图镜头沿时间线播放，自动合成时长与字幕，实时录制或用 FFmpeg 导出 MP4。
 
-## 运行环境
+### 功能一览
 
-- Node.js 20 或更高版本
-- npm
-- FFmpeg，并确保 `ffmpeg` 可以从命令行直接运行
-- 支持 WebGL 的现代浏览器
-- 可选的 WebCodecs 支持
-- 可选的 NVIDIA GPU 与可用的 FFmpeg NVENC 编码器
+| 模块   | 已实现                                                                                                                                                                                                   |
+| ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Plan   | 创建/编辑/删除旅行；按天维护 Day 与地点；高德与 LocationIQ 国内外地点搜索；多种交通方式；道路/步行/骑行/大圆路线；国内与国际底图切换；全球足迹                                                           |
+| Record | 为地点上传照片与视频；素材存于 `data/media/`；浏览器预览；视频 Range 响应                                                                                                                                |
+| Story  | 地图镜头 + 路线 + 载具按序播放；照片/视频/字幕合成画布；16:9 与 9:16；720p 与 1080p；30 与 60 FPS；MediaRecorder 实时录制；WebCodecs 或 JPEG 帧离线渲染；FFmpeg 合成 MP4；NVIDIA NVENC，失败回退 libx264 |
 
-不生成影片时，缺少 FFmpeg 不影响行程规划和地图预览。
+**部分实现**：足迹元数据字段不保证完整；地图预热能减少空白瓦片但不保证 100%；WebCodecs / FFmpeg / NVENC 效果随浏览器与显卡而异；上游地图与路线服务依赖外部网络与额度。
 
-## 安装与启动
+**尚未实现**：账号与登录、多用户隔离、公开分享、权限控制；数据库（当前用平面文件 JSON）与对象存储；多设备同步与协作编辑；AI 规划行程、AI 文案、EXIF 自动重建、照片内容识别；背景音乐库、多套主题模板、在线任务队列、服务端分布式渲染、手机原生应用。
 
-安装依赖。
+### 技术栈
+
+Next.js 15 · React 19 · TypeScript · MapLibre GL · Turf.js · FFmpeg，地图与地点数据来自高德、LocationIQ、OpenFreeMap 与 OSRM。
+
+## 快速开始
 
 ```bash
 npm install
+cp .env.example .env.local      # 至少配置一个地点搜索密钥，否则搜索无结果
+npm run dev                     # 打开 http://localhost:3000
 ```
 
-复制环境变量模板。
+生产模式：`npm run build && npm start`。类型检查：`npm run typecheck`。
 
-```bash
-cp .env.example .env.local
-```
+| 环境变量                  | 用途                                         | 默认值 |
+| ------------------------- | -------------------------------------------- | ------ |
+| `GAODE_KEY`               | 国内地点搜索、逆地理编码、国内步行与骑行路线 | 未配置 |
+| `LOCATIONIQ_KEY`          | 国外地点搜索与逆地理编码                     | 未配置 |
+| `MAX_MEDIA_UPLOAD_MB`     | 单个地点素材上传上限                         | 250 MB |
+| `MAX_RECORDING_UPLOAD_MB` | 单个完整录像上传上限                         | 512 MB |
+| `MAX_FRAME_BATCH_MB`      | 单批 JPEG 帧上传上限                         | 64 MB  |
+| `MAX_TRIPS_BODY_MB`       | 行程 JSON 写入上限                           | 10 MB  |
 
-按需填写地点搜索密钥。至少配置一个地点服务，搜索功能才能返回结果。
+密钥只写进 `.env.local`，不要给服务端密钥加 `NEXT_PUBLIC_` 前缀。
 
-开发模式。
+## 部署与边界
 
-```bash
-npm run dev
-```
-
-浏览器打开 [http://localhost:3000](http://localhost:3000)。
-
-生产模式。
-
-```bash
-npm run build
-npm start
-```
-
-类型检查。
-
-```bash
-npm run typecheck
-```
-
-## 环境变量
-
-| 变量 | 用途 | 默认值 |
-| --- | --- | --- |
-| `GAODE_KEY` | 国内地点搜索、逆地理编码、国内步行和骑行路线 | 未配置 |
-| `LOCATIONIQ_KEY` | 国外地点搜索和逆地理编码 | 未配置 |
-| `MAX_MEDIA_UPLOAD_MB` | 单个地点素材上传上限 | 250 MB |
-| `MAX_RECORDING_UPLOAD_MB` | 单个完整录像上传上限 | 512 MB |
-| `MAX_FRAME_BATCH_MB` | 单批 JPEG 帧上传上限 | 64 MB |
-| `MAX_TRIPS_BODY_MB` | 行程 JSON 写入上限 | 10 MB |
-
-密钥只应写入 `.env.local`。不要给服务端密钥添加 `NEXT_PUBLIC_` 前缀。
-
-## 地图与第三方服务
-
-- 国内底图使用高德地图
-- 国际矢量底图来自 OpenFreeMap，并经 `/api/tiles` 缓存代理
-- 驾车等道路路线使用 OSRM 公共演示服务
-- 国内步行与骑行路线使用高德 Web 服务
-- 国外地点搜索使用 LocationIQ
-- 页面字体从 Google Fonts 加载，网络不可用时会使用系统字体
-
-OpenFreeMap、OSRM、Google Fonts、高德和 LocationIQ 都依赖外部网络与各自的服务条款。公开服务的可用性和请求额度不由本项目保证。
-
-## 本地数据与备份
-
-应用数据默认写在项目根目录的 `data/`。
-
-```text
-data/
-├── trips.json
-├── media/
-└── recordings/
-```
-
-国际地图瓦片缓存在 `tile-cache/`。持续浏览地图或下载离线瓦片后，该目录可能占用较多磁盘空间。
-
-升级、迁移或清理项目以前，请备份 `data/` 和自己的 `.env.local`。这两个目录都已被 Git 忽略。
-
-## 自部署边界
-
-所有业务 API 都没有登录校验。只要能访问服务，就能读取或改写行程、上传素材、删除素材和生成影片。
-
-建议只监听本机地址，或者把服务放在可信局域网中。需要暴露到公网时，应在反向代理或应用层增加身份验证、HTTPS、请求速率限制和独立的数据备份。
-
-当前地理编码与路线接口使用单进程内存限流。多进程或多实例部署不会共享这份计数。
-
-## 已知问题
-
-- 2026 年 8 月 26 日运行 `npm audit --registry=https://registry.npmjs.org` 时，报告包含 3 个高危项，涉及 Next.js 及其间接依赖 PostCSS 和 sharp。本轮开源清理按项目约束保留现有依赖版本。
-- `mp4-muxer@5.2.2` 已被上游标记为停止维护。当前离线 MP4 路径仍依赖它。
-- 项目没有 ESLint 依赖，Next.js 构建配置会跳过 lint。当前使用 TypeScript 类型检查、未使用代码检查和生产构建做基础验证。
-- 首页和地图页面的首次加载代码约为 435 KB 至 449 KB，主要来自 MapLibre 与地图功能。进一步拆包会影响地图初始化流程，本轮没有改动。
-- WebCodecs、MediaRecorder、硬件编码和 Canvas 录制能力随浏览器、操作系统与显卡驱动变化。
-- 新 README 截图需要项目维护者按“项目截图”一节补充。
+- 需要 Node.js 20+、npm、可用的 `ffmpeg` 命令、支持 WebGL 的现代浏览器。不生成影片时没有 FFmpeg 也不影响规划与地图预览。
+- 应用数据默认写在项目根目录的 `data/`（行程、媒体、录像），国际地图瓦片缓存在 `tile-cache/`。升级、迁移或清理前请备份 `data/` 和自己的 `.env.local`，这两处都被 Git 忽略。
+- 所有业务 API 没有登录校验，只要能访问服务即可读写行程、上传或删除素材、提交录像和触发 FFmpeg。建议只监听本机地址或放入可信局域网；需要暴露公网时，应在反向代理或应用层补充身份验证、HTTPS、速率限制与独立备份。
 
 ## 开源许可
 
@@ -159,19 +94,19 @@ data/
 
 ## 关注与交流
 
+如果你对旅行影片、自部署或地图动画感兴趣，欢迎关注公众号或加入交流群。
+
 <table>
   <tr>
     <td align="center">
       <img src="./public/readme/wechat-official-account.jpg" width="240" alt="王不二丶bOol 公众号二维码" />
-      <br />
-      公众号
+      <br />公众号
     </td>
     <td align="center">
       <img src="./public/readme/wechat-group.png" width="240" alt="Travel Story 交流群二维码" />
-      <br />
-      交流群
+      <br />交流群
     </td>
   </tr>
 </table>
 
-当前群二维码图片标注的有效期截止到 2026 年 8 月 21 日，现已过期。请通过公众号获取新的入群方式，替换 `public/readme/wechat-group.png` 后 README 会自动显示新图。
+<!-- 群二维码更新提示：原图有效期到 2026-08-21 已过期，请通过公众号获取新入群方式，替换 public/readme/wechat-group.png 后即自动更新。 -->

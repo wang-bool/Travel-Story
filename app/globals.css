@@ -787,7 +787,8 @@ body::before {
   transition: transform 0.25s ease, box-shadow 0.25s ease;
   position: relative;
   /* 定高：封面 + 固定行数的正文，卡片整齐划一；长文一律截断 */
-  height: 336px;
+  /* 高度要容得下正文全部行（否则 flex-shrink 会把文字上下压掉一截） */
+  height: 300px;
   display: flex;
   flex-direction: column;
 }
@@ -797,12 +798,13 @@ body::before {
 }
 .trip-card-cover {
   flex: none;
-  height: 130px;
+  /* 窄横幅色带：只包住角标 N°… 与 DAYS，不再是一大片空色块 */
+  height: 80px;
   position: relative;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  padding: 14px 16px;
+  padding: 12px 16px;
 }
 .trip-card-no {
   color: rgba(255, 255, 255, 0.85);
@@ -837,7 +839,8 @@ body::before {
 .trip-card-meta {
   font-size: 11px;
   letter-spacing: 0.08em;
-  margin-bottom: 12px;
+  /* <p> 默认 margin-top:1em 会多占十几px 挤爆定高卡片，清掉由 margin-bottom 接管 */
+  margin: 0 0 12px;
   /* 日期/备注单行省略（全文见悬停提示） */
   white-space: nowrap;
   overflow: hidden;
@@ -851,6 +854,8 @@ body::before {
   font-size: 13px;
   color: var(--ink-2);
   line-height: 1.5;
+  /* 默认 margin:1em 0（13px 上下）是挤出溢出的元凶之一，清掉由删除按钮的 auto 边距接管 */
+  margin: 0;
   /* 地点列表固定两行，超出省略（全文见悬停提示） */
   display: -webkit-box;
   -webkit-line-clamp: 2;

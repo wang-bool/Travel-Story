@@ -290,12 +290,12 @@ export default function HomePage() {
                       className="trip-card-stops"
                       title={
                         t.stops.length > 0
-                          ? t.stops.map((s) => s.name).join(" · ")
+                          ? t.stops.map((s) => s.name).join(" → ")
                           : undefined
                       }
                     >
                       {t.stops.length > 0
-                        ? t.stops.map((s) => s.name).join(" · ")
+                        ? t.stops.map((s) => s.name).join(" → ")
                         : "尚无行程节点"}
                     </p>
                     <button
