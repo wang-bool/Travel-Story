@@ -77,11 +77,11 @@ export interface TripStop {
   type: StopType;
   /** Day 内排序（0-based） */
   order: number;
-  /** 该地点上传的图片/视频素材（元数据；二进制在 IndexedDB，见 lib/media.ts） */
+  /** 该地点上传的图片/视频素材元数据；二进制保存在服务端 data/media/ */
   media?: MediaMeta[];
 }
 
-/** 素材元数据。二进制本体不进 localStorage（5MB 限额扛不住视频） */
+/** 素材元数据。二进制本体由 /api/media 写入服务端，不进入 localStorage */
 export interface MediaMeta {
   id: string;
   kind: "image" | "video";

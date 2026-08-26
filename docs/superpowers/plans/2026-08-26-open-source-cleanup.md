@@ -413,6 +413,7 @@ Expected: strict unused-code checking and production build pass.
 
 **Files:**
 - Modify: `.env.example`
+- Modify: `lib/types.ts`
 - Create: `README.md`
 - Create: `LICENSE`
 - Create: `public/readme/wechat-official-account.jpg`
@@ -439,6 +440,8 @@ Use the standard MIT text and this line:
 Copyright (c) 2026 王不二丶bOol
 ```
 
+Update the stale comments in `lib/types.ts` so they state that `/api/media` stores media bytes under `data/media/`, not IndexedDB.
+
 - [ ] **Step 3: Copy QR images**
 
 Copy the provided 344 × 344 JPEG to `public/readme/wechat-official-account.jpg` and the 939 × 1491 PNG to `public/readme/wechat-group.png`. Verify both with `file`.
@@ -461,7 +464,7 @@ Use these top-level sections:
 ## 关注与交流
 ```
 
-Describe only implemented behavior. Require Node.js 20 or newer, npm, and FFmpeg. Show install, environment copy, development, build, and start commands. Explain both map keys and four upload limits. Explain `data/`, `tile-cache/`, the lack of authentication, and the three accepted high-severity audit findings. List all five requested screenshot filenames but embed only files that exist. Show the two QR images side by side and state that the group QR may expire.
+Describe only implemented behavior. Require Node.js 20 or newer, npm, and FFmpeg. Show install, environment copy, development, build, and start commands. Explain both map keys and four upload limits. Explain `data/`, `tile-cache/`, the lack of authentication, and the three accepted high-severity audit findings. List all five requested screenshot filenames but embed only files that exist. Show the two QR images side by side. State that the supplied group image expired on 2026-08-21 and direct readers to the official account for the current group entry.
 
 - [ ] **Step 5: Update `需求文档.md`**
 
@@ -477,7 +480,7 @@ Mark accounts, multi-user isolation, public sharing, cloud storage, AI planning 
 
 ```bash
 rg -n 'TODO|TBD|NEXT_PUBLIC_(GAODE|LOCATIONIQ)|GAODE_KEY=.+|LOCATIONIQ_KEY=.+' README.md 需求文档.md .env.example LICENSE
-git add .env.example README.md LICENSE public/readme 需求文档.md
+git add .env.example lib/types.ts README.md LICENSE public/readme 需求文档.md
 git commit -m "docs: prepare Travel Story for open source"
 ```
 
