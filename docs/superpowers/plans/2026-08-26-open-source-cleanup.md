@@ -184,7 +184,7 @@ test("display names remove controls and stay bounded", () => {
 - [ ] **Step 2: Verify RED**
 
 ```bash
-node --test --experimental-strip-types tests/request-safety.test.mjs
+node --no-warnings --experimental-strip-types tests/request-safety.test.mjs
 ```
 
 Expected: FAIL with `ERR_MODULE_NOT_FOUND`.
@@ -252,7 +252,7 @@ export function safeDisplayName(value: string, fallback: string): string {
 - [ ] **Step 4: Verify GREEN**
 
 ```bash
-node --test --experimental-strip-types tests/request-safety.test.mjs
+node --no-warnings --experimental-strip-types tests/request-safety.test.mjs
 npx tsc --noEmit --incremental false
 ```
 
@@ -301,7 +301,7 @@ In `app/api/media/route.ts`, require `isMediaId(id)`, normalize the name with `s
 - [ ] **Step 4: Verify**
 
 ```bash
-node --test --experimental-strip-types tests/request-safety.test.mjs
+node --no-warnings --experimental-strip-types tests/request-safety.test.mjs
 npm run typecheck
 ```
 
@@ -339,7 +339,7 @@ Call `fs.stat(dir)` before FFmpeg and return 400 `missing-frames` if the frame d
 - [ ] **Step 5: Verify and commit**
 
 ```bash
-node --test --experimental-strip-types tests/request-safety.test.mjs
+node --no-warnings --experimental-strip-types tests/request-safety.test.mjs
 npm run typecheck
 npm run build
 git add app/api/recordings/route.ts app/api/recordings/frames/route.ts
@@ -489,7 +489,7 @@ Expected: no placeholder markers, public key names, or populated key values.
 ```bash
 npm run typecheck
 npx tsc --noEmit --incremental false --noUnusedLocals --noUnusedParameters
-node --test --experimental-strip-types tests/request-safety.test.mjs
+node --no-warnings --experimental-strip-types tests/request-safety.test.mjs
 npm run build
 ```
 
