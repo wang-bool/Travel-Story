@@ -326,7 +326,11 @@ function createWebCodecsSink(
       muxer.finalize();
       const res = await fetch(
         `/api/recordings?trip=${encodeURIComponent(tripName)}&ext=mp4`,
-        { method: "POST", body: muxer.target.buffer }
+        {
+          method: "POST",
+          headers: { "Content-Type": "video/mp4" },
+          body: muxer.target.buffer,
+        }
       );
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);

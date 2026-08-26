@@ -319,10 +319,14 @@ git commit -m "fix: bound trip and media writes"
 **Files:**
 - Modify: `app/api/recordings/route.ts`
 - Modify: `app/api/recordings/frames/route.ts`
+- Modify: `lib/record/realtime.ts`
+- Modify: `lib/record/offline.ts`
 
 - [ ] **Step 1: Validate complete recordings**
 
 Require an exact `mp4` or `webm` extension, a matching video MIME type, and `MAX_RECORDING_UPLOAD_MB` with fallback 512. Return 400 for `invalid-video-extension`, `unsupported-video-type`, or `empty-video`; return 413 for `request-too-large`; return 500 `recording-failed` for unexpected errors. Keep the current WebM preservation fallback after FFmpeg failure.
+
+Set the matching `Content-Type` header in both recording clients. The realtime client uses the Blob type with `video/<ext>` fallback. The offline MP4 client sends `video/mp4`.
 
 - [ ] **Step 2: Validate frame sessions**
 
@@ -342,7 +346,7 @@ Call `fs.stat(dir)` before FFmpeg and return 400 `missing-frames` if the frame d
 node --no-warnings --experimental-strip-types tests/request-safety.test.mjs
 npm run typecheck
 npm run build
-git add app/api/recordings/route.ts app/api/recordings/frames/route.ts
+git add app/api/recordings/route.ts app/api/recordings/frames/route.ts lib/record/realtime.ts lib/record/offline.ts
 git commit -m "fix: validate recording uploads"
 ```
 

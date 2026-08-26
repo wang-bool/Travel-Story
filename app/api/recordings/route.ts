@@ -6,8 +6,15 @@ import { execFile } from "child_process";
 import { promises as fs } from "fs";
 import path from "path";
 import { ensureDirs, RECORDINGS_DIR } from "@/lib/server/db";
+import {
+  RequestTooLargeError,
+  getLimitBytes,
+  isAllowedVideoType,
+  readBodyWithinLimit,
+} from "@/lib/server/requestSafety";
 
 export const maxDuration = 300; // 长视频转码需要时间
+const MAX_BODY_BYTES = getLimitBytes(process.env.MAX_RECORDING_UPLOAD_MB, 512);
 
 function transcodeToMp4(input: string, output: string): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -36,9 +43,17 @@ function transcodeToMp4(input: string, output: string): Promise<void> {
 export async function POST(req: NextRequest) {
   try {
     const tripName = (req.nextUrl.searchParams.get("trip") ?? "纪录片").trim() || "纪录片";
-    const ext = req.nextUrl.searchParams.get("ext") === "mp4" ? "mp4" : "webm";
-    const buf = Buffer.from(await req.arrayBuffer());
-    if (!buf.length) return Response.json({ error: "空视频" }, { status: 400 });
+    const extParam = req.nextUrl.searchParams.get("ext");
+    if (extParam !== "mp4" && extParam !== "webm") {
+      return Response.json({ error: "invalid-video-extension" }, { status: 400 });
+    }
+    const ext = extParam;
+    const contentType = req.headers.get("content-type") ?? "";
+    if (!isAllowedVideoType(contentType, ext)) {
+      return Response.json({ error: "unsupported-video-type" }, { status: 400 });
+    }
+    const buf = await readBodyWithinLimit(req, MAX_BODY_BYTES);
+    if (!buf.length) return Response.json({ error: "empty-video" }, { status: 400 });
 
     await ensureDirs();
     // 文件名：时间戳 + 清洗后的行程名
@@ -70,6 +85,10 @@ export async function POST(req: NextRequest) {
       size: stat.size,
     });
   } catch (e) {
-    return Response.json({ error: String(e) }, { status: 500 });
+    if (e instanceof RequestTooLargeError) {
+      return Response.json({ error: "request-too-large" }, { status: 413 });
+    }
+    console.error("[recordings] 录像写入失败", e);
+    return Response.json({ error: "recording-failed" }, { status: 500 });
   }
 }

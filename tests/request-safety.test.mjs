@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   RequestTooLargeError,
+  declaredBodyExceeds,
   getLimitBytes,
   isAllowedMediaType,
   isAllowedVideoType,
@@ -11,6 +12,13 @@ import {
   readBodyWithinLimit,
   safeDisplayName,
 } from "../lib/server/requestSafety.ts";
+
+test("declared body size handles missing, valid, and malformed headers", () => {
+  assert.equal(declaredBodyExceeds(new Headers(), 8), false);
+  assert.equal(declaredBodyExceeds(new Headers({ "content-length": "8" }), 8), false);
+  assert.equal(declaredBodyExceeds(new Headers({ "content-length": "9" }), 8), true);
+  assert.equal(declaredBodyExceeds(new Headers({ "content-length": "abc" }), 8), false);
+});
 
 test("limit parsing uses defaults and accepts positive decimal MB values", () => {
   assert.equal(getLimitBytes(undefined, 10), 10 * 1024 * 1024);

@@ -7,22 +7,31 @@ import { execFile } from "child_process";
 import { promises as fs } from "fs";
 import path from "path";
 import { ensureDirs, RECORDINGS_DIR } from "@/lib/server/db";
+import {
+  declaredBodyExceeds,
+  getLimitBytes,
+  isFrameName,
+  isSessionId,
+} from "@/lib/server/requestSafety";
 
 export const maxDuration = 300; // 合成数千帧需要时间
 
 /** 客户端渲染帧率兜底值（正常由 finalize 的 fps 参数传过来） */
 const DEFAULT_FPS = 60;
+const MAX_BATCH_BYTES = getLimitBytes(process.env.MAX_FRAME_BATCH_MB, 64);
 
 function framesDir(session: string) {
-  const safe = session.replace(/[^a-zA-Z0-9-]/g, "").slice(0, 64);
-  return path.join(RECORDINGS_DIR, `frames-${safe}`);
+  if (!isSessionId(session)) throw new Error("invalid-session");
+  return path.join(RECORDINGS_DIR, `frames-${session}`);
 }
 
 export async function POST(req: NextRequest) {
   try {
     const sp = req.nextUrl.searchParams;
     const session = sp.get("session") ?? "";
-    if (!session) return Response.json({ error: "缺 session" }, { status: 400 });
+    if (!isSessionId(session)) {
+      return Response.json({ error: "invalid-session" }, { status: 400 });
+    }
     const dir = framesDir(session);
 
     if (sp.get("finalize") === "1") {
@@ -34,6 +43,10 @@ export async function POST(req: NextRequest) {
       const ts = new Date().toISOString().slice(0, 19).replace(/[T:]/g, "").replace(/-/g, "");
       const finalFile = `${ts}-${safeName}.mp4`;
       const outPath = path.join(RECORDINGS_DIR, finalFile);
+      const frameNames = await fs.readdir(dir).catch(() => []);
+      if (!frameNames.some(isFrameName)) {
+        return Response.json({ error: "missing-frames" }, { status: 400 });
+      }
       await assemble(dir, outPath, fps);
       await fs.rm(dir, { recursive: true, force: true });
       const stat = await fs.stat(outPath);
@@ -46,30 +59,47 @@ export async function POST(req: NextRequest) {
     }
 
     // 一批帧：按文件名落盘（%06d.jpg，ffmpeg image2 按序号读）
+    if (declaredBodyExceeds(req.headers, MAX_BATCH_BYTES)) {
+      return Response.json({ error: "request-too-large" }, { status: 413 });
+    }
     const fd = await req.formData();
     const files = fd.getAll("frames");
-    if (!files.length) return Response.json({ error: "空批次" }, { status: 400 });
+    if (!files.length) {
+      return Response.json({ error: "empty-frame-batch" }, { status: 400 });
+    }
+    if (
+      !files.every(
+        (item): item is File =>
+          item instanceof File &&
+          isFrameName(item.name) &&
+          item.type.toLowerCase() === "image/jpeg"
+      )
+    ) {
+      return Response.json({ error: "invalid-frame" }, { status: 400 });
+    }
+    if (files.reduce((total, file) => total + file.size, 0) > MAX_BATCH_BYTES) {
+      return Response.json({ error: "request-too-large" }, { status: 413 });
+    }
     await ensureDirs();
     await fs.mkdir(dir, { recursive: true });
     await Promise.all(
-      files.map(async (f) => {
-        const file = f as File;
-        const name = path.basename(file.name).replace(/[^a-zA-Z0-9._-]/g, "");
-        if (!name) throw new Error(`非法帧文件名: ${file.name}`);
-        await fs.writeFile(path.join(dir, name), Buffer.from(await file.arrayBuffer()));
+      files.map(async (file) => {
+        await fs.writeFile(path.join(dir, file.name), Buffer.from(await file.arrayBuffer()));
       })
     );
     return Response.json({ ok: true, count: files.length });
   } catch (e) {
-    return Response.json({ error: String(e) }, { status: 500 });
+    console.error("[recordings] 帧处理失败", e);
+    return Response.json({ error: "frame-processing-failed" }, { status: 500 });
   }
 }
 
 export async function DELETE(req: NextRequest) {
   const session = req.nextUrl.searchParams.get("session") ?? "";
-  if (session) {
-    await fs.rm(framesDir(session), { recursive: true, force: true }).catch(() => {});
+  if (!isSessionId(session)) {
+    return Response.json({ error: "invalid-session" }, { status: 400 });
   }
+  await fs.rm(framesDir(session), { recursive: true, force: true }).catch(() => {});
   return Response.json({ ok: true });
 }
 

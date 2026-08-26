@@ -18,12 +18,16 @@ export function getLimitBytes(raw: string | undefined, fallbackMb: number): numb
   return Math.floor(mb * BYTES_PER_MB);
 }
 
+export function declaredBodyExceeds(headers: Headers, maxBytes: number): boolean {
+  const declared = Number(headers.get("content-length"));
+  return Number.isFinite(declared) && declared > maxBytes;
+}
+
 export async function readBodyWithinLimit(
   req: BodyRequest,
   maxBytes: number
 ): Promise<Buffer> {
-  const declared = Number(req.headers.get("content-length"));
-  if (Number.isFinite(declared) && declared > maxBytes) {
+  if (declaredBodyExceeds(req.headers, maxBytes)) {
     throw new RequestTooLargeError();
   }
   const body = Buffer.from(await req.arrayBuffer());

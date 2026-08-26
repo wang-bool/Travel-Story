@@ -154,7 +154,11 @@ export function recordRealtime({
       if (cancelled) return null;
       const res = await fetch(
         `/api/recordings?trip=${encodeURIComponent(trip.name)}&ext=${ext}`,
-        { method: "POST", body: blob }
+        {
+          method: "POST",
+          headers: { "Content-Type": blob.type || `video/${ext}` },
+          body: blob,
+        }
       );
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
