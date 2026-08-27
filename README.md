@@ -6,7 +6,7 @@
 
 **把你的旅行，变成一部带地图动画与字幕的纪录片。**
 
-一次旅行，一颗星球 —— 从一个想法，到一条路线，再到一部影片。
+一次旅行，一颗星球。从一个想法，到一条路线，再到一部影片。
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue.svg)](https://www.typescriptlang.org/)
@@ -32,7 +32,7 @@
 <div align="center">
   <img src="./public/readme/story-movie.gif" alt="旅行影片：地图镜头沿时间线播放" width="85%" />
   <br />
-  <sub>一次旅行，一部影片 —— 地图镜头、路线与字幕沿时间线自动播放</sub>
+  <sub>一次旅行，一部影片。地图镜头、路线与字幕沿时间线自动播放</sub>
 </div>
 
 <table>
@@ -87,6 +87,21 @@
 
 ## 🚀 快速开始
 
+### 一条命令创建本地项目
+
+发布 npm 包后，可以用下面的命令创建一份只属于自己的 Travel Story：
+
+```bash
+npx @wang-bool/create-travel-story my-travel-story
+cd my-travel-story
+cp .env.example .env.local
+npm run dev
+```
+
+初始化器会安装依赖。它检测不到 `ffmpeg` 时会提示你安装，但仍可先使用规划和地图预览功能。
+
+### 从源码运行
+
 ```bash
 npm install
 cp .env.example .env.local      # 至少配置一个地点搜索密钥，否则搜索无结果
@@ -110,16 +125,16 @@ npm run dev                     # 打开 http://localhost:3000
 
 地点搜索由服务端代理外部服务，需要你自己申请免费密钥填进 `.env.local`（该文件已在 `.gitignore` 中，不会提交）。**至少配置一个**，搜索功能才可用；两个都配，国内外体验最佳。
 
-**高德 —— 国内主力（POI 搜索、逆地理编码、国内步行/骑行路线）**
+**高德，国内主力（POI 搜索、逆地理编码、国内步行/骑行路线）**
 
 1. 注册并登录 [高德开放平台](https://lbs.amap.com/)
 2. 控制台 → 应用管理 → 创建应用 → 添加 Key
 3. 服务平台选择 **「Web服务」**（个人开发者免费）
 4. 将 Key 填入 `.env.local` 的 `GAODE_KEY`
 
-> ⚠️ 必须是「Web服务」类型的 Key——**「JS API」类型的 Key 调不动文本搜索接口**。
+> ⚠️ 必须是「Web服务」类型的 Key。**「JS API」类型的 Key 调不动文本搜索接口**。
 
-**LocationIQ —— 国外主力（OSM 全球数据，支持中文名）**
+**LocationIQ，国外主力（OSM 全球数据，支持中文名）**
 
 1. 打开 [LocationIQ](https://locationiq.com/) 注册（免费档约 1 万次/月）
 2. 将 Token 填入 `.env.local` 的 `LOCATIONIQ_KEY`
