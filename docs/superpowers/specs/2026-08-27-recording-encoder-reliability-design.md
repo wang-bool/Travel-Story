@@ -18,7 +18,7 @@ Keep the existing offline, frame-exact renderer and WebCodecs MP4 output path. C
 
 ### Reliable fallback
 
-If the software WebCodecs configuration is unavailable or emits an encoding error, use the existing JPEG frame-sequence sink. It encodes JPEG at quality 0.95, uploads one-second batches concurrently, and asks the server to produce a standards-compatible H.264 MP4.
+If the software WebCodecs configuration is unavailable, emits an encoding error, or produces an invalid MP4, use the existing JPEG frame-sequence sink. It encodes JPEG at quality 0.95, uploads one-second batches concurrently, and asks the server to produce a standards-compatible H.264 MP4.
 
 The server attempts NVENC first and falls back to x264 at CRF 18, so the fallback prioritizes visual quality and hardware speed where available.
 
@@ -28,15 +28,16 @@ This change does not alter map timing, frame count, compositor rendering, timeli
 
 ## Failure handling
 
-WebCodecs configuration failure selects JPEG/FFmpeg before any frames are rendered. A runtime WebCodecs encoding failure ends the recording with an error rather than silently delivering a potentially corrupt MP4; retrying through the JPEG fallback after frames have already been emitted is outside this change because the already-rendered frame sequence is not retained.
+WebCodecs configuration failure selects JPEG/FFmpeg before any frames are rendered. The upload endpoint validates browser-generated MP4s by decoding keyframes with FFmpeg and rejects streams that report decode errors. A WebCodecs runtime failure or rejected MP4 automatically restarts the offline render using the JPEG/FFmpeg sink. This costs a second render only for an abnormal output and prevents it from being delivered.
 
 ## Tests
 
-Add a source-level regression test that verifies the recorder requests software H.264 and that the JPEG/FFmpeg fallback remains available. Run the full Node test suite and TypeScript typecheck after the change.
+Add source-level regression tests that verify the recorder requests software H.264, validates direct MP4 uploads, and retries through the JPEG/FFmpeg fallback. Run the full Node test suite and TypeScript typecheck after the change.
 
 ## Success criteria
 
 - The recorder no longer requests hardware H.264 encoding.
 - A browser without a supported software WebCodecs configuration uses JPEG/FFmpeg fallback.
+- A browser-generated MP4 with FFmpeg decode errors is rejected and re-rendered through JPEG/FFmpeg.
 - The existing offline renderer and output quality settings remain unchanged.
 - Automated tests and typechecking pass.

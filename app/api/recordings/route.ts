@@ -40,6 +40,27 @@ function transcodeToMp4(input: string, output: string): Promise<void> {
   });
 }
 
+/**
+ * 直传 MP4 来自浏览器 WebCodecs。只解码关键帧即可快速发现坏 SPS、
+ * 参考帧等码流错误；FFmpeg 即使返回 0，也会把解码错误写入 stderr。
+ */
+async function validateMp4(input: string): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    execFile(
+      "ffmpeg",
+      ["-v", "error", "-skip_frame", "nokey", "-i", input, "-map", "0:v:0", "-f", "null", "-"],
+      { timeout: 240_000 },
+      (err, _stdout, stderr) => {
+        if (err || stderr.trim()) {
+          reject(new Error(`MP4 码流校验失败: ${(stderr || err?.message || "unknown").slice(-400)}`));
+        } else {
+          resolve();
+        }
+      }
+    );
+  });
+}
+
 export async function POST(req: NextRequest) {
   try {
     const tripName = (req.nextUrl.searchParams.get("trip") ?? "纪录片").trim() || "纪录片";
@@ -64,7 +85,15 @@ export async function POST(req: NextRequest) {
     await fs.writeFile(rawPath, buf);
 
     let finalFile = `${base}.${ext}`;
-    if (ext === "webm") {
+    if (ext === "mp4") {
+      try {
+        await validateMp4(rawPath);
+      } catch (e) {
+        await fs.unlink(rawPath).catch(() => {});
+        console.warn("[recordings] 拒绝损坏 MP4", e);
+        return Response.json({ error: "invalid-video-stream" }, { status: 422 });
+      }
+    } else {
       // 浏览器给的是 webm → 转成通用 mp4
       const mp4Path = path.join(RECORDINGS_DIR, `${base}.mp4`);
       try {

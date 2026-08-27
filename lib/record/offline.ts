@@ -58,6 +58,12 @@ export interface OfflineRenderer {
   done: Promise<OfflineRenderResult | null>;
 }
 
+class WebCodecsOutputError extends Error {
+  constructor(cause: unknown) {
+    super(cause instanceof Error ? cause.message : String(cause));
+  }
+}
+
 /** 输出通道：渲染泵只管每帧喂画布，怎么变成 MP4 由通道决定 */
 interface FrameSink {
   /** reuse=true 表示该帧与上一帧完全相同（静态帧去重） */
@@ -88,11 +94,11 @@ export function renderOffline({
   onProgress(rendered: number, total: number, phase: RenderPhase): void;
 }): OfflineRenderer {
   let cancelled = false;
-  let session = "";
-  let yieldChannel: MessageChannel | null = null;
-  const frameMs = 1000 / fps;
-
-  const done = (async (): Promise<OfflineRenderResult | null> => {
+  const run = async (forceJpeg: boolean): Promise<OfflineRenderResult | null> => {
+    let session = "";
+    let yieldChannel: MessageChannel | null = null;
+    let usedWebCodecs = false;
+    const frameMs = 1000 / fps;
     const map = engine.map;
     const t0 = performance.now();
     try {
@@ -107,7 +113,8 @@ export function renderOffline({
         Math.ceil(tl.totalMs / frameMs) + Math.ceil(OUTRO_MS / frameMs);
 
       // 2. 输出通道：WebCodecs 软件 H.264，不可用则 JPEG 帧序列兜底
-      const encConfig = await pickEncoderConfig(width, height, fps);
+      const encConfig = forceJpeg ? null : await pickEncoderConfig(width, height, fps);
+      usedWebCodecs = Boolean(encConfig);
       session = crypto.randomUUID();
       const sink: FrameSink = encConfig
         ? createWebCodecsSink(encConfig, width, height, fps, trip.name)
@@ -223,6 +230,11 @@ export function renderOffline({
           `总计 ${((performance.now() - t0) / 1000).toFixed(1)}s`
       );
       return result;
+    } catch (e) {
+      if (usedWebCodecs && !forceJpeg && !cancelled) {
+        throw new WebCodecsOutputError(e);
+      }
+      throw e;
     } finally {
       // 还原引擎（同 playTrip 结束）
       engine.clearTraveled();
@@ -236,7 +248,15 @@ export function renderOffline({
         fetch(`/api/recordings/frames?session=${session}`, { method: "DELETE" }).catch(() => {});
       }
     }
-  })();
+  };
+
+  const done = run(false).catch((e) => {
+    if (!cancelled && e instanceof WebCodecsOutputError) {
+      console.warn("[travel-story] WebCodecs 输出未通过校验，改用 JPEG + FFmpeg 重试", e);
+      return run(true);
+    }
+    throw e;
+  });
 
   return {
     cancel: () => {
