@@ -203,14 +203,21 @@ export function GlobeMap({
     const updateFlags = () => {
       const list = markersRef.current;
       if (!list.length) return;
-      const c = map.getCenter();
       const next: FlagPos[] = [];
       for (const m of list) {
-        // 与镜头中心的球面夹角 < 90° = 可见半球（project 会把背面点镜像到球面上）
-        const visible =
-          Math.sin(c.lat * R) * Math.sin(m.latitude * R) +
-            Math.cos(c.lat * R) * Math.cos(m.latitude * R) * Math.cos((m.longitude - c.lng) * R) >
-          0;
+        // 问 MapLibre 自己的遮挡判定（球背面/切线地平线外即隐藏）：
+        // project() 会把背面点镜像到球面上，不裁掉旗子会浮在球缘外。
+        let visible: boolean;
+        try {
+          visible = !map.transform.isLocationOccluded(new maplibregl.LngLat(m.longitude, m.latitude));
+        } catch {
+          // 旧版 maplibre 兜底：与镜头中心的球面夹角 < 90°
+          const c = map.getCenter();
+          visible =
+            Math.sin(c.lat * R) * Math.sin(m.latitude * R) +
+              Math.cos(c.lat * R) * Math.cos(m.latitude * R) * Math.cos((m.longitude - c.lng) * R) >
+            0;
+        }
         if (!visible) continue;
         const p = map.project([m.longitude, m.latitude]);
         next.push({ id: m.id, x: p.x, y: p.y });

@@ -164,17 +164,29 @@ export class TravelMapEngine {
   }
 
   /**
-   * 点是否在地球的可见半球。Globe 模式下 project() 对背面点也会给出
-   * 屏幕坐标（镜像到球面上），地标 HTML 层必须用这个方法把背面点藏起来。
+   * 点是否在地球的可见半球（含地平线裁切）。
+   *
+   * 直接问 MapLibre 自己的遮挡判定（transform.isLocationOccluded）——这正是
+   * MapLibre 渲染 Marker 时隐藏球背面用的同一套逻辑（见其 Marker._updateOpacity），
+   * 会自动覆盖 zoom/pitch/bearing 下的切线地平线：那是真实的可见边界，
+   * 球体小/zoom 低时只有约 60~70°，比 90° 大圆更小。Mercator 投影恒返回
+   * false（永不遮挡），所以平面视图无需额外判断。
+   *
+   * 早期手算的「与镜头中心球面夹角 < 90°」判定太宽：夹角 70~90° 的点
+   * MapLibre 已视为球背面（project() 把它们镜像到球面上），但旧判定仍放行，
+   * 导致地标浮在球缘外。
    */
   isOnVisibleHemisphere(lng: number, lat: number): boolean {
-    if (this.proj !== "globe") return true;
-    const c = this.map.getCenter();
     const [mlng, mlat] = this.toMap([lng, lat]);
-    const rad = Math.PI / 180;
-    const la1 = (c.lat * rad), la2 = mlat * rad, dl = (mlng - c.lng) * rad;
-    // 与镜头中心的球面夹角 < 90° = 可见半球
-    return Math.sin(la1) * Math.sin(la2) + Math.cos(la1) * Math.cos(la2) * Math.cos(dl) > 0;
+    try {
+      return !this.map.transform.isLocationOccluded(new maplibregl.LngLat(mlng, mlat));
+    } catch {
+      // 旧版 maplibre 无该接口时的兜底：退回 90° 半球判定
+      const c = this.map.getCenter();
+      const rad = Math.PI / 180;
+      const la1 = c.lat * rad, la2 = mlat * rad, dl = (mlng - c.lng) * rad;
+      return Math.sin(la1) * Math.sin(la2) + Math.cos(la1) * Math.cos(la2) * Math.cos(dl) > 0;
+    }
   }
 
   // ------------------------------------------------------------
