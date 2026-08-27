@@ -1,15 +1,52 @@
 {
-  "name": "travel-story",
+  "name": "@wang-bool/create-travel-story",
   "version": "0.1.0",
-  "private": true,
-  "description": "Travel Story — 旅行规划与旅行纪录片生成平台（初版：Plan + 地图动画预览）",
+  "description": "Create a local Travel Story workspace for trip planning and map-based travel movies.",
+  "bin": {
+    "create-travel-story": "bin/create-travel-story.mjs"
+  },
+  "files": [
+    "app",
+    "bin",
+    "components",
+    "lib",
+    "public",
+    "scripts",
+    "tests",
+    ".env.example",
+    "next-env.d.ts",
+    "next.config.ts",
+    "tsconfig.json",
+    "README.md",
+    "LICENSE",
+    "CONTRIBUTING.md",
+    "需求文档.md"
+  ],
+  "keywords": [
+    "travel",
+    "trip-planner",
+    "travel-journal",
+    "travel-video",
+    "self-hosted",
+    "maplibre",
+    "webcodecs",
+    "ffmpeg"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "predev": "node scripts/copy-maplibre-worker.mjs",
     "dev": "next dev",
     "prebuild": "node scripts/copy-maplibre-worker.mjs",
     "build": "next build",
     "start": "next start",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --test tests/*.test.mjs",
+    "check": "npm run test && npm run typecheck && npm run build"
   },
   "dependencies": {
     "@phosphor-icons/core": "^2.1.1",
