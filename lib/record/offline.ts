@@ -17,7 +17,7 @@
 //  A. 流水线并行：JPEG 编码 / 批次上传都在后台飞，渲染不等；
 //  B. 静态帧去重：镜头静止 ≥150ms、无载具、无动态素材的帧与上一帧
 //     完全相同，直接复用，不渲染不编码；
-//  C. WebCodecs 编码（硬编优先、软编其次）：VideoFrame 零拷贝喂
+//  C. WebCodecs 软件编码：VideoFrame 零拷贝喂
 //     VideoEncoder，浏览器内直接出 MP4——免 JPEG、免分批上传、
 //     免服务端二次编码；都不支持则回退 JPEG 帧序列通道（A+B 兜底）。
 // ============================================================
@@ -106,7 +106,7 @@ export function renderOffline({
       const totalFrames =
         Math.ceil(tl.totalMs / frameMs) + Math.ceil(OUTRO_MS / frameMs);
 
-      // 2. 输出通道：WebCodecs（硬编优先、软编其次），不行则 JPEG 帧序列兜底
+      // 2. 输出通道：WebCodecs 软件 H.264，不可用则 JPEG 帧序列兜底
       const encConfig = await pickEncoderConfig(width, height, fps);
       session = crypto.randomUUID();
       const sink: FrameSink = encConfig
@@ -247,11 +247,11 @@ export function renderOffline({
 }
 
 // ------------------------------------------------------------
-// 通道 C：WebCodecs 硬件编码（有 GPU 时启用）
+// 通道 C：WebCodecs 软件 H.264 编码
 // ------------------------------------------------------------
 
-/** 探测 WebCodecs H.264 编码：优先 GPU 硬编，其次浏览器软编
- * （软编仍远快于 JPEG 通道：VideoFrame 零拷贝、免分批上传、免服务端二次编码）；
+/** 探测 WebCodecs H.264 软件编码
+ * （仍比 JPEG 通道少一次帧图片上传与服务端二次编码）；
  * 都不支持返回 null，回退 JPEG 帧序列通道 */
 async function pickEncoderConfig(
   width: number,
@@ -270,8 +270,7 @@ async function pickEncoderConfig(
     avc: { format: "avc" }, // 交给 mp4-muxer，需要 avcC description
   };
   const candidates: VideoEncoderConfig[] = [
-    { ...base, hardwareAcceleration: "prefer-hardware" } as VideoEncoderConfig,
-    { ...base, hardwareAcceleration: "no-preference" } as VideoEncoderConfig,
+    { ...base, hardwareAcceleration: "prefer-software" } as VideoEncoderConfig,
   ];
   for (const c of candidates) {
     try {
