@@ -41,14 +41,14 @@ function transcodeToMp4(input: string, output: string): Promise<void> {
 }
 
 /**
- * 直传 MP4 来自浏览器 WebCodecs。只解码关键帧即可快速发现坏 SPS、
- * 参考帧等码流错误；FFmpeg 即使返回 0，也会把解码错误写入 stderr。
+ * 直传 MP4 来自浏览器 WebCodecs。完整解码以发现坏 SPS、参考帧与
+ * P/B 帧错误；FFmpeg 即使返回 0，也会把解码错误写入 stderr。
  */
 async function validateMp4(input: string): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     execFile(
       "ffmpeg",
-      ["-v", "error", "-skip_frame", "nokey", "-i", input, "-map", "0:v:0", "-f", "null", "-"],
+      ["-v", "error", "-i", input, "-map", "0:v:0", "-f", "null", "-"],
       { timeout: 240_000 },
       (err, _stdout, stderr) => {
         if (err || stderr.trim()) {

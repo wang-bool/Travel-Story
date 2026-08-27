@@ -14,12 +14,16 @@ test("offline recording requests software H.264 and retains JPEG fallback", asyn
 });
 
 test("corrupt direct MP4 uploads are rejected and retried through JPEG fallback", async () => {
-  const [offline, recordings] = await Promise.all([
+  const [offline, recordings, compositor] = await Promise.all([
     readFile(new URL("../lib/record/offline.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/recordings/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/record/compositor.ts", import.meta.url), "utf8"),
   ]);
 
   assert.match(recordings, /async function validateMp4\(/);
   assert.match(recordings, /await validateMp4\(rawPath\)/);
+  assert.doesNotMatch(recordings, /-skip_frame/);
+  assert.match(compositor, /reset\(\): void/);
+  assert.match(offline, /compositor\.reset\(\)/);
   assert.match(offline, /run\(true\)/);
 });

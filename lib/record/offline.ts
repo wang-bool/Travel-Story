@@ -102,6 +102,8 @@ export function renderOffline({
     const map = engine.map;
     const t0 = performance.now();
     try {
+      // 重试会复用合成器；先清掉上一遍可能留下的片尾/素材状态。
+      compositor.reset();
       // 1. 时间轴：行程 → 每一帧的精确相机/载具/已行驶状态
       const tl = await buildTimeline({
         engine,

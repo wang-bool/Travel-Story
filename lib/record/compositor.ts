@@ -55,6 +55,13 @@ export function mapPixelRatioFor(format: VideoFormat, quality: VideoQuality): nu
   return quality === "720" ? 1 : 1.5;
 }
 
+/** 合成器的虚拟画幅（地图 cover 的目标尺寸）。录制页用它算地图 pixelRatio
+ *  的最小必要值：地图源分辨率盖过它即可，大窗口下不必用满 mapPixelRatioFor 的
+ *  高倍率（那是为小窗口保清晰度设的上限） */
+export function videoView(format: VideoFormat): { w: number; h: number } {
+  return format === "portrait" ? { w: VIEW_BASE, h: 1280 } : { w: 1280, h: VIEW_BASE };
+}
+
 /** 实时播放/录制的合成帧率（离线渲染帧率由渲染泵的 fps 参数决定） */
 export const FPS = 60;
 
@@ -95,6 +102,8 @@ export interface Compositor {
   updateShot(shot: PlaybackShot, at?: number): void;
   /** 片尾字幕（播放结束后调用，再录几秒收尾画面） */
   showOutro(at?: number): void;
+  /** 开始新的离线渲染尝试前，清除上一次的镜头/片尾状态 */
+  reset(): void;
   /** 离线渲染：把虚拟时刻 now 的这一帧画到输出画布（视频素材逐帧 seek） */
   renderFrame(now: number): Promise<void>;
   /** 该帧画面是否与静止时完全相同（静态帧去重用）：视频素材、素材淡入、片尾渐显期间返回 false */
@@ -233,6 +242,15 @@ export function createCompositor({
     }
   }
 
+  function reset() {
+    current = null;
+    outroAt = 0;
+    if (activeVideo) {
+      activeVideo.pause();
+      activeVideo = null;
+    }
+  }
+
   interface ActiveMedia {
     item: PreparedMedia;
     /** 在这一份素材内部的时间（含淡入） */
@@ -313,13 +331,24 @@ export function createCompositor({
   // 逐帧绘制（全部在虚拟坐标系里，draw 开头统一放大到输出尺寸）
   // ------------------------------------------------------------
 
+  // cover 变换只在地图源尺寸变化时重算：每帧都做 max/除法纯属浪费
+  let coverSrc: HTMLCanvasElement | HTMLVideoElement | null = null;
+  let coverSW = 0, coverSH = 0;
+  let coverCache: { sw: number; sh: number; scale: number; offX: number; offY: number } | null = null;
+
   /** 地图画布（CSS 像素）→ 输出画布的 cover 变换参数 */
   function coverTransform() {
     const src = mapSource;
     const sw = src instanceof HTMLVideoElement ? src.videoWidth || 1280 : src.width;
     const sh = src instanceof HTMLVideoElement ? src.videoHeight || 720 : src.height;
-    const scale = Math.max(VIEW_W / sw, VIEW_H / sh);
-    return { sw, sh, scale, offX: (VIEW_W - sw * scale) / 2, offY: (VIEW_H - sh * scale) / 2 };
+    if (src !== coverSrc || sw !== coverSW || sh !== coverSH) {
+      const scale = Math.max(VIEW_W / sw, VIEW_H / sh);
+      coverCache = { sw, sh, scale, offX: (VIEW_W - sw * scale) / 2, offY: (VIEW_H - sh * scale) / 2 };
+      coverSrc = src;
+      coverSW = sw;
+      coverSH = sh;
+    }
+    return coverCache!;
   }
 
   // 虚拟画幅（字幕渲染器用）
@@ -481,6 +510,7 @@ export function createCompositor({
     dwellMs,
     updateShot,
     showOutro,
+    reset,
     renderFrame,
     isStaticFrame,
     start() {

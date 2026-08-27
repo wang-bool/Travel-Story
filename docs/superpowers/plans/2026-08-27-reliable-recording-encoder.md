@@ -4,7 +4,7 @@
 
 **Goal:** Prevent corrupt WebCodecs H.264 output while retaining the fast offline WebCodecs recording path and automatic JPEG/FFmpeg recovery.
 
-**Architecture:** The WebCodecs probe requests software H.264 only; if unavailable it selects the existing parallel JPEG frame-sequence sink and server-side NVENC/x264 assembly. Direct browser MP4s are keyframe-decoded by FFmpeg before delivery; an error triggers a one-time complete JPEG/FFmpeg re-render.
+**Architecture:** The WebCodecs probe requests software H.264 only; if unavailable it selects the existing parallel JPEG frame-sequence sink and server-side NVENC/x264 assembly. Direct browser MP4s are fully decoded by FFmpeg before delivery; an error resets the compositor and triggers a one-time complete JPEG/FFmpeg re-render.
 
 **Tech Stack:** Next.js 15, TypeScript, browser WebCodecs, mp4-muxer, Node.js built-in test runner, FFmpeg.
 
@@ -88,7 +88,7 @@ Expected: FAIL because direct MP4 uploads are written without validation and the
 - [ ] **Step 3: Add server validation and client retry**
 
 ```ts
-await validateMp4(rawPath); // FFmpeg decodes keyframes with -v error
+await validateMp4(rawPath); // FFmpeg decodes the complete video with -v error
 ```
 
 Return `422 { error: "invalid-video-stream" }` after deleting an invalid direct MP4. In `renderOffline`, wrap the initial WebCodecs run; on a WebCodecs encoder, muxer, upload, or validation failure, run once more with `forceJpeg: true`. Do not retry cancellation or JPEG/FFmpeg failures.

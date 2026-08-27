@@ -28,7 +28,7 @@ This change does not alter map timing, frame count, compositor rendering, timeli
 
 ## Failure handling
 
-WebCodecs configuration failure selects JPEG/FFmpeg before any frames are rendered. The upload endpoint validates browser-generated MP4s by decoding keyframes with FFmpeg and rejects streams that report decode errors. A WebCodecs runtime failure or rejected MP4 automatically restarts the offline render using the JPEG/FFmpeg sink. This costs a second render only for an abnormal output and prevents it from being delivered.
+WebCodecs configuration failure selects JPEG/FFmpeg before any frames are rendered. The upload endpoint validates browser-generated MP4s with a complete FFmpeg decode and rejects streams that report decode errors. A WebCodecs runtime failure or rejected MP4 resets the compositor and automatically restarts the offline render using the JPEG/FFmpeg sink. This costs a second render only for an abnormal output and prevents it from being delivered.
 
 ## Tests
 
