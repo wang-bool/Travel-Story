@@ -176,18 +176,27 @@ export function playTrip(opts: PlayOptions): PlaybackController {
 
     await new Promise<void>((resolve) => {
       const start = performance.now();
+      // 载具每帧都更新；「已行驶」轨迹每 2 帧更新一次几何：
+      // 轨迹生长不需要 60 步/秒的折线刷新，30 步/秒视觉无差别，
+      // 却省掉一半的 GeoJSON setData + 折线图层重绘——这是每帧最重的一项，
+      // 减负直接对应录制时「轨迹一卡一卡」的掉帧。
+      let traveledFrame = 0;
       const step = (now: number) => {
         if (cancelled) return resolve();
         const t = Math.min(1, (now - start) / duration);
         const s = sampleAlongLine(animLine, t);
         // 载具头顶钉实时里程：走了多远一眼有数（字幕里的总里程是静态版）
         engine.setVehicle(s.point, heading, transport, animFrame(now), formatDistance(distanceM * t));
-        engine.setTraveled(s.traveled);
+        if ((traveledFrame++ & 1) === 0) engine.setTraveled(s.traveled);
         if (useGlobe) {
           // 球面跟随（同 fly 的长航段处理）
-          engine.jumpCamera({ center: s.point, zoom: 4.5, bearing: 0, pitch: 30 }, 0.35);
+          engine.jumpCamera({ center: s.point, zoom: 4.5, bearing: 0, pitch: 30 }, 1);
         } else if (!overview) {
-          engine.jumpCamera(cameraForDrive(s.point, s.bearing, t, from, to, followZoom), 0.42);
+          // 镜头精确锁定载具（lag=1，不滞后）：载具每帧精确贴线走，镜头若
+          // 滞后跟随，转弯处两者错位会变成载具在屏幕上前后/左右来回抖。
+          // 精确锁定后载具在屏幕中央稳如锚点，只有地图在下面流动
+          // （离线时间轴 buildTimeline 本来就是精确锁定，此处对齐它）
+          engine.jumpCamera(cameraForDrive(s.point, s.bearing, t, from, to, followZoom), 1);
         }
         // overview：镜头固定不动，车沿路线横穿全图
 
@@ -227,18 +236,21 @@ export function playTrip(opts: PlayOptions): PlaybackController {
 
     await new Promise<void>((resolve) => {
       const start = performance.now();
+      // 同 drive：载具每帧更新，红色「已行驶」轨迹每 2 帧更新一次几何
+      let traveledFrame = 0;
       const step = (now: number) => {
         if (cancelled) return resolve();
         const t = Math.min(1, (now - start) / duration);
         const s = sampleAlongLine(coords, t);
         engine.setVehicle(s.point, heading, seg.transport, animFrame(now), formatDistance(dist * t));
         // 空中航段同样画「已行驶」轨迹（飞机/UFO/火箭 都覆盖）
-        engine.setTraveled(s.traveled);
-        // 高空跟随：globe 用固定球面高度，区域航段按距离与视野自适应
+        if ((traveledFrame++ & 1) === 0) engine.setTraveled(s.traveled);
+        // 高空跟随：globe 用固定球面高度，区域航段按距离与视野自适应。
+        // 同样精确锁定（lag=1，不滞后），避免飞机与镜头错位抖动
         const z = useGlobe ? 4.5 : zoomForDistance(dist, s.point[1], vpMin);
         engine.jumpCamera(
           { center: s.point, zoom: z, bearing: 0, pitch: 30 },
-          0.35
+          1
         );
         if (t < 1) {
           raf = requestAnimationFrame(step);
@@ -255,17 +267,41 @@ export function playTrip(opts: PlayOptions): PlaybackController {
   // 主流程
   // ------------------------------------------------------------
 
-  /** 等地图样式与图层就绪（车辆/路线 source 在 load 后才存在） */
+  /**
+   * 只等样式与业务图层就绪；不能等瓦片下载完成（map.loaded()）。
+   *
+   * map.loaded() / isStyleLoaded() 都会在「视口内仍有瓦片在途」时返回
+   * false。国内高德栅格底图预热后往往还有在途瓦片，此时若继续等
+   * style.load（只在样式重载时触发一次），预热结束后就会永久停在播放前。
+   * 故改为：业务图层（ensureLayers 在 load/style.load 后必然建好）在就直接
+   * 放行；不在才等 load/style.load，并设超时兜底，绝不挂死。
+   */
   const whenLoaded = () =>
     new Promise<void>((r) => {
-      if (engine.map.loaded()) r();
-      else {
-        const onLoad = () => {
-          engine.map.off("load", onLoad);
-          r();
-        };
-        engine.map.on("load", onLoad);
+      const ready = () => {
+        try {
+          return !!engine.map.getLayer("ts-vehicle");
+        } catch {
+          return false;
+        }
+      };
+      if (ready()) {
+        r();
+        return;
       }
+      let done = false;
+      let timer: ReturnType<typeof setTimeout> | null = null;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        engine.map.off("load", finish);
+        engine.map.off("style.load", finish);
+        if (timer) clearTimeout(timer);
+        r();
+      };
+      timer = setTimeout(finish, 5000);
+      engine.map.on("load", finish);
+      engine.map.on("style.load", finish);
     });
 
   (async () => {

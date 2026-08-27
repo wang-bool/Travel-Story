@@ -112,29 +112,33 @@ export function createCaptionRenderer(trip: Trip): CaptionRenderer {
       const dimmed = shotDay != null && stop.day !== shotDay && !isCurrent;
       ctx.globalAlpha = dimmed ? 0.35 : 1;
       // 点
+      const r = isCurrent ? 9 : 6;
       ctx.beginPath();
-      ctx.arc(x, y, isCurrent ? 7 : 4.5, 0, Math.PI * 2);
+      ctx.arc(x, y, r, 0, Math.PI * 2);
       ctx.fillStyle = isCurrent ? ACCENT : INK;
       ctx.shadowColor = "rgba(0,0,0,0.4)";
       ctx.shadowBlur = 6;
       ctx.fill();
       ctx.beginPath();
-      ctx.arc(x, y, isCurrent ? 7 : 4.5, 0, Math.PI * 2);
+      ctx.arc(x, y, r, 0, Math.PI * 2);
       ctx.strokeStyle = PAPER;
       ctx.lineWidth = 2;
       ctx.shadowBlur = 0;
       ctx.stroke();
       // 名称（当前点大字，其余小字）：加粗 + 深色描边光晕，
-      // 压在复杂地图上、经视频压缩后也清晰可读
+      // 压在复杂地图上、经视频压缩后也清晰可读。
+      // 成片按 1280/1920 宽回放，字号要再大一号才看得清「从哪到哪」
       ctx.font = isCurrent
-        ? '700 17px "Space Mono", monospace'
-        : '600 13px "Space Mono", monospace';
+        ? '700 24px "Space Mono", monospace'
+        : '600 18px "Space Mono", monospace';
       ctx.lineJoin = "round";
       ctx.strokeStyle = dimmed ? "rgba(15,13,10,0.55)" : "rgba(15,13,10,0.9)";
-      ctx.lineWidth = isCurrent ? 4.5 : 3.5;
-      ctx.strokeText(stop.name, x + 12, y + 5);
+      ctx.lineWidth = isCurrent ? 5.5 : 4;
+      const tx = x + r + 7;
+      const ty = y + (isCurrent ? 8 : 6);
+      ctx.strokeText(stop.name, tx, ty);
       ctx.fillStyle = PAPER;
-      ctx.fillText(stop.name, x + 12, y + 5);
+      ctx.fillText(stop.name, tx, ty);
     }
     ctx.restore();
   }
@@ -143,20 +147,43 @@ export function createCaptionRenderer(trip: Trip): CaptionRenderer {
   // 影院暗角
   // ------------------------------------------------------------
 
+  // 暗角预渲染成离屏图：渐变只建一次，每帧改成一次 drawImage blit。
+  // 渐变与旧实现逐像素一致（同一参数、同一离屏画布绘制序列）。
+  let vignette: { w: number; h: number; canvas: HTMLCanvasElement } | null = null;
+
   function drawVignette(ctx: CanvasRenderingContext2D, view: CaptionView) {
-    const vg = ctx.createRadialGradient(
-      view.w / 2, view.h / 2, view.h * 0.36,
-      view.w / 2, view.h / 2, view.h * 0.95
-    );
-    vg.addColorStop(0, "rgba(0,0,0,0)");
-    vg.addColorStop(1, "rgba(0,0,0,0.5)");
-    ctx.fillStyle = vg;
-    ctx.fillRect(0, 0, view.w, view.h);
+    if (!vignette || vignette.w !== view.w || vignette.h !== view.h) {
+      const c = document.createElement("canvas");
+      c.width = view.w;
+      c.height = view.h;
+      const cctx = c.getContext("2d")!;
+      const vg = cctx.createRadialGradient(
+        view.w / 2, view.h / 2, view.h * 0.36,
+        view.w / 2, view.h / 2, view.h * 0.95
+      );
+      vg.addColorStop(0, "rgba(0,0,0,0)");
+      vg.addColorStop(1, "rgba(0,0,0,0.5)");
+      cctx.fillStyle = vg;
+      cctx.fillRect(0, 0, view.w, view.h);
+      vignette = { w: view.w, h: view.h, canvas: c };
+    }
+    ctx.drawImage(vignette.canvas, 0, 0);
   }
 
   // ------------------------------------------------------------
   // 场记字幕
   // ------------------------------------------------------------
+
+  // 字号排版缓存：字号在镜头内恒定（只有载具动画随时间变），
+  // 每帧重复 measureText 量宽（文本整形是 canvas 里最贵的操作之一）纯属浪费。
+  // 结果只依赖 (镜头文本, 画幅)，与时间无关，缓存逐像素等价。
+  let slateLayout: { key: string; size: number } | null = null;
+  function cachedSlateSize(key: string, compute: () => number): number {
+    if (!slateLayout || slateLayout.key !== key) {
+      slateLayout = { key, size: compute() };
+    }
+    return slateLayout.size;
+  }
 
   function drawSlate(ctx: CanvasRenderingContext2D, view: CaptionView, now: number) {
     const shot = current?.shot;
@@ -186,13 +213,21 @@ export function createCaptionRenderer(trip: Trip): CaptionRenderer {
     }
 
     // 长标题自动降字号（竖屏整体降一档），再按实测宽度微降，防止溢出屏幕
-    let titleSize = title.length > 18 ? 40 : title.length > 12 ? 48 : 64;
-    if (view.portrait) titleSize = Math.min(titleSize, title.length > 18 ? 32 : 48);
+    // （字号按镜头缓存，避免每帧重复 measureText 量宽）
+    const titleSize = cachedSlateSize(
+      `slate:${shot.type}:${shot.index}:${title}`,
+      () => {
+        let s = title.length > 18 ? 40 : title.length > 12 ? 48 : 64;
+        if (view.portrait) s = Math.min(s, title.length > 18 ? 32 : 48);
+        ctx.font = `600 ${s}px "Fraunces", "Songti SC", serif`;
+        while (s > 26 && ctx.measureText(title).width > view.w - SLATE_MARGIN * 2) {
+          s -= 2;
+          ctx.font = `600 ${s}px "Fraunces", "Songti SC", serif`;
+        }
+        return s;
+      }
+    );
     ctx.font = `600 ${titleSize}px "Fraunces", "Songti SC", serif`;
-    while (titleSize > 26 && ctx.measureText(title).width > view.w - SLATE_MARGIN * 2) {
-      titleSize -= 2;
-      ctx.font = `600 ${titleSize}px "Fraunces", "Songti SC", serif`;
-    }
     const x = SLATE_MARGIN;
     ctx.save();
     ctx.textBaseline = "alphabetic";
@@ -278,13 +313,20 @@ export function createCaptionRenderer(trip: Trip): CaptionRenderer {
     const iconWFor = (s: number) => s * 1.9;
     const arrowWFor = (s: number) => 32 + gap * 2 + iconWFor(s);
 
-    // 自适应字号：量总宽，超宽就降档（竖屏画布窄，下限放更低）
-    let size = view.portrait ? 40 : 48;
-    const totalWidth = (s: number) => {
-      ctx.font = `600 ${s}px "Fraunces", "Songti SC", serif`;
-      return ctx.measureText(from).width + ctx.measureText(to).width + arrowWFor(s);
-    };
-    while (size > (view.portrait ? 20 : 28) && totalWidth(size) > view.w - SLATE_MARGIN * 2) size -= 4;
+    // 自适应字号：量总宽，超宽就降档（竖屏画布窄，下限放更低）。
+    // 字号按镜头缓存，避免每帧重复 measureText 量宽（结果只依赖地名与画幅）
+    const size = cachedSlateSize(
+      `seg:${shot.index}:${from}:${to}:${transport}:${view.portrait}`,
+      () => {
+        let s = view.portrait ? 40 : 48;
+        const totalWidth = (v: number) => {
+          ctx.font = `600 ${v}px "Fraunces", "Songti SC", serif`;
+          return ctx.measureText(from).width + ctx.measureText(to).width + arrowWFor(v);
+        };
+        while (s > (view.portrait ? 20 : 28) && totalWidth(s) > view.w - SLATE_MARGIN * 2) s -= 4;
+        return s;
+      }
+    );
     const arrowW = arrowWFor(size);
 
     ctx.save();

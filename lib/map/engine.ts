@@ -14,7 +14,7 @@
 // React 只负责：地标图标的 HTML 覆盖层 + 播放时的界面（场记卡等）。
 // ============================================================
 
-import maplibregl from "maplibre-gl";
+import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { styleForMode } from "./style";
 import type { StyleSpecification } from "maplibre-gl";
@@ -22,6 +22,11 @@ import type { BaseMode } from "./style";
 import { vehicleIconSvg, iconDataUrl } from "@/lib/mapIcons";
 import { wgs84ToGcj02 } from "@/lib/coord";
 import type { TripSegment, TripStop, Transport } from "@/lib/types";
+
+// MapLibre v6 是 ESM-only，worker 在 Next.js 里无法自动定位，必须显式指向
+// public/maplibre 下自托管的 worker，否则矢量瓦片（国际模式）不渲染。
+// 见 scripts/copy-maplibre-worker.mjs。
+maplibregl.setWorkerUrl("/maplibre/maplibre-gl-worker.mjs");
 
 const ROUTE_FAINT = "#CFC3AC";
 const ROUTE_TRAVELED = "#E4572E";
@@ -179,7 +184,7 @@ export class TravelMapEngine {
   isOnVisibleHemisphere(lng: number, lat: number): boolean {
     const [mlng, mlat] = this.toMap([lng, lat]);
     try {
-      return !this.map.transform.isLocationOccluded(new maplibregl.LngLat(mlng, mlat));
+      return !this.map._camera.transform.isLocationOccluded(new maplibregl.LngLat(mlng, mlat));
     } catch {
       // 旧版 maplibre 无该接口时的兜底：退回 90° 半球判定
       const c = this.map.getCenter();

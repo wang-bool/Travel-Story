@@ -143,6 +143,14 @@ export function recordRealtime({
       await new Promise<void>((r) => setTimeout(r, OUTRO_MS));
       if (cancelled) return null;
 
+      // 收尾画面录完即停进度上报：上传/转码阶段已无画面进展，若进度定时器
+      // 还活着，它每隔 250ms 会把阶段拉回 "record"，把「转码合成中」提示冲掉，
+      // 用户只能对着最后一帧干等。
+      if (progressTimer) {
+        clearInterval(progressTimer);
+        progressTimer = null;
+      }
+
       // 6. 收流上传（webm 由服务端转码成 mp4）
       onProgress(totalMs, totalMs, "encode");
       const blob = await new Promise<Blob>((resolve) => {

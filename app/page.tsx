@@ -163,7 +163,7 @@ export default function HomePage() {
           <section className="hero">
             <p className="font-mono kicker">YOUR PLAN IS THE SCRIPT</p>
             <h1 className="font-display hero-title">
-              人生每一段旅程，
+              你的每一次旅行，
               <br />
               都是一场<span className="accent">电影。</span>
             </h1>

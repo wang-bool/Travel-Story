@@ -12,7 +12,7 @@
 // ============================================================
 
 import { useEffect, useRef, useState } from "react";
-import maplibregl from "maplibre-gl";
+import * as maplibregl from "maplibre-gl";
 import { TravelMapEngine } from "@/lib/map/engine";
 import { landmark } from "@/lib/landmark";
 import { prefetchAroundStops } from "@/lib/map/prefetch";

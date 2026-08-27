@@ -16,10 +16,15 @@
 // ============================================================
 
 import { useEffect, useImperativeHandle, useRef, useState } from "react";
-import maplibregl from "maplibre-gl";
+import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { styleForMode } from "@/lib/map/style";
 import { absolutizeStyle } from "@/lib/map/engine";
+
+// MapLibre v6 是 ESM-only，worker 在 Next.js 里无法自动定位（import.meta.url
+// 不是有效 http URL），必须显式指向 public/maplibre 下自托管的 worker，
+// 否则矢量瓦片（国际模式）不渲染。见 scripts/copy-maplibre-worker.mjs。
+maplibregl.setWorkerUrl("/maplibre/maplibre-gl-worker.mjs");
 
 /** 足迹模式插旗的地点：每一段旅程的每一个地点各一面旗 */
 export interface GlobeMarker {
@@ -209,7 +214,7 @@ export function GlobeMap({
         // project() 会把背面点镜像到球面上，不裁掉旗子会浮在球缘外。
         let visible: boolean;
         try {
-          visible = !map.transform.isLocationOccluded(new maplibregl.LngLat(m.longitude, m.latitude));
+          visible = !map._camera.transform.isLocationOccluded(new maplibregl.LngLat(m.longitude, m.latitude));
         } catch {
           // 旧版 maplibre 兜底：与镜头中心的球面夹角 < 90°
           const c = map.getCenter();
