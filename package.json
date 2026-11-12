@@ -20,7 +20,10 @@
     "README.md",
     "LICENSE",
     "CONTRIBUTING.md",
-    "需求文档.md"
+    "需求文档.md",
+    "mcp",
+    "skills",
+    "docs/mcp.md"
   ],
   "keywords": [
     "travel",
@@ -33,22 +36,27 @@
     "ffmpeg"
   ],
   "engines": {
-    "node": ">=20"
+    "node": ">=22.18"
   },
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
     "predev": "node scripts/copy-maplibre-worker.mjs",
-    "dev": "next dev",
+    "dev": "next dev --hostname 127.0.0.1",
     "prebuild": "node scripts/copy-maplibre-worker.mjs",
     "build": "next build",
-    "start": "next start",
+    "start": "next start --hostname 127.0.0.1",
     "typecheck": "tsc --noEmit",
-    "test": "node --test tests/*.test.mjs",
-    "check": "npm run test && npm run typecheck && npm run build"
+    "test": "node scripts/run-tests.mjs",
+    "check": "npm run test && npm run typecheck && npm run build",
+    "mcp": "node mcp/index.mjs",
+    "agent": "node mcp/start.mjs",
+    "service:check": "node scripts/service.mjs check",
+    "service:ensure": "node scripts/service.mjs ensure"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "@phosphor-icons/core": "^2.1.1",
     "@phosphor-icons/react": "^2.1.10",
     "@turf/turf": "^7.1.0",
@@ -56,7 +64,8 @@
     "mp4-muxer": "^5.2.2",
     "next": "^15.1.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

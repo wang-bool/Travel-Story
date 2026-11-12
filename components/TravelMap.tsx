@@ -70,6 +70,8 @@ export function TravelMap({
   const [baseMode, setBaseMode] = useState<BaseMode>(readBaseMode);
   /** 指向创建引擎 effect 里的 update()：切底图后标记投影基准变了，要立即重投影 */
   const updateRef = useRef<() => void>(() => {});
+  const callbacksRef = useRef({onReady,onFail});
+  callbacksRef.current = {onReady,onFail};
 
   // 创建引擎（StrictMode 下会 create→destroy→recreate 双挂载，
   // 需保证重建安全；WebGL 受限时降级提示而不是崩掉整个应用）
@@ -84,17 +86,31 @@ export function TravelMap({
         // 调试钩子（仅 dev）：Playwright/控制台可直接驱动引擎
         (window as unknown as { __tsEngine?: TravelMapEngine }).__tsEngine = engine;
       }
-      onReady?.(engine);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       console.error("[travel-story] 地图初始化失败", e);
       setMapFailed(msg);
-      onFail?.(msg);
+      callbacksRef.current.onFail?.(msg);
       return;
     }
 
     const mapEngine = engine;
     let raf = 0;
+    let disposed = false;
+    let failed = false;
+    const failMap = (message: string) => {
+      if (disposed || failed) return;
+      failed = true;
+      clearTimeout(loadTimeout);
+      setMapFailed(message);
+      callbacksRef.current.onFail?.(message);
+    };
+    const loadTimeout = setTimeout(() => failMap('地图加载超时，请检查网络后重试。'),30_000);
+    const onContextLost = (event: Event) => {
+      event.preventDefault();
+      failMap('地图 WebGL 上下文丢失，请重新加载地图。');
+    };
+    mapEngine.map.getCanvas().addEventListener('webglcontextlost',onContextLost);
     // 始终通过 tripRef 读取最新 trip，避免 move 事件闭包捕获旧值
     // 导致 fitToStops 飞行动画期间把标记位置反复清空。
     // 录像页（hideMarkers）不需要 DOM 地标层：整个投影循环跳过，
@@ -122,15 +138,27 @@ export function TravelMap({
     updateRef.current = update;
 
     const onLoad = () => {
+      if (disposed || failed) return;
+      clearTimeout(loadTimeout);
       syncTrip(mapEngine, tripRef.current ?? null);
+      callbacksRef.current.onReady?.(mapEngine);
       update();
     };
     if (mapEngine.map.loaded()) onLoad();
     else mapEngine.map.on("load", onLoad);
     mapEngine.map.on("move", schedule);
     mapEngine.map.on("resize", schedule);
+    // 侧栏比例、上下布局、录制画幅切换都可能只改变容器尺寸。
+    const observer = new ResizeObserver(() => {
+      if (!disposed && !failed) mapEngine.resize();
+    });
+    observer.observe(containerRef.current);
 
     return () => {
+      disposed = true;
+      observer.disconnect();
+      clearTimeout(loadTimeout);
+      mapEngine.map.getCanvas().removeEventListener('webglcontextlost',onContextLost);
       cancelAnimationFrame(raf);
       mapEngine.map.off("load", onLoad);
       mapEngine.map.off("move", schedule);
@@ -201,7 +229,7 @@ export function TravelMap({
           </p>
           <button
             className="btn btn-ghost"
-            onClick={() => setRetryKey((k) => k + 1)}
+            onClick={() => { setMapFailed(null); setRetryKey((k) => k + 1); }}
           >
             重试
           </button>
@@ -265,12 +293,17 @@ export function TravelMap({
   );
 }
 
+// Each engine receives initial framing once. Refreshed metadata/routes must not
+// compete with a user's camera or an Agent presentation command.
+const framingState = new WeakMap<TravelMapEngine, {tripId:string;hasStops:boolean}>();
 function syncTrip(engine: TravelMapEngine, trip: Trip | null) {
   if (!trip) return;
   engine.setRoutes(trip.segments);
-  if (trip.stops.length) {
-    engine.fitToStops(trip.stops, 100);
-  }
+  const previous = framingState.get(engine);
+  const hasStops = trip.stops.length > 0;
+  const initialFrame = !previous || previous.tripId !== trip.id || !previous.hasStops;
+  framingState.set(engine,{tripId:trip.id,hasStops});
+  if (hasStops && initialFrame) engine.fitToStops(trip.stops,100);
 }
 
 // 重新导出类型供页面使用

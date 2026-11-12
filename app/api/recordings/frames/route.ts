@@ -1,3 +1,4 @@
+import { assertLocalRequest, errorResponse } from "@/lib/server/localAccess";
 // 纪录片离线渲染：帧接收与服务端合成
 //   POST   /api/recordings/frames?session=<id>   body=FormData(frames: 逐张 JPEG，文件名 %06d.jpg)
 //   POST   /api/recordings/frames?session=<id>&finalize=1&trip=<名>&fps=<60|30>   ffmpeg 合成 MP4 并清理帧目录
@@ -26,6 +27,7 @@ function framesDir(session: string) {
 }
 
 export async function POST(req: NextRequest) {
+  try { await assertLocalRequest(req); } catch (error) { return errorResponse(error); }
   try {
     const sp = req.nextUrl.searchParams;
     const session = sp.get("session") ?? "";
@@ -95,6 +97,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  try { await assertLocalRequest(req); } catch (error) { return errorResponse(error); }
   const session = req.nextUrl.searchParams.get("session") ?? "";
   if (!isSessionId(session)) {
     return Response.json({ error: "invalid-session" }, { status: 400 });

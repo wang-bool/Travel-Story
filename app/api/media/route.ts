@@ -1,3 +1,4 @@
+import { assertLocalRequest, errorResponse } from "@/lib/server/localAccess";
 // 素材上传：POST /api/media?id=<id>&name=<原始文件名>，body 为文件字节
 import { NextRequest } from "next/server";
 import { writeMedia } from "@/lib/server/db";
@@ -13,6 +14,7 @@ import {
 const MAX_BODY_BYTES = getLimitBytes(process.env.MAX_MEDIA_UPLOAD_MB, 250);
 
 export async function POST(req: NextRequest) {
+  try { await assertLocalRequest(req); } catch (error) { return errorResponse(error); }
   const id = req.nextUrl.searchParams.get("id");
   if (!id || !isMediaId(id)) {
     return Response.json({ error: "invalid-media-id" }, { status: 400 });

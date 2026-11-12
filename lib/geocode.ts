@@ -22,7 +22,7 @@
 // route 告诉前端「未配置」，界面给出提示而不是假装没搜到。
 // ============================================================
 
-import { gcj02ToWgs84 } from "./coord";
+import { gcj02ToWgs84 } from "./coord.ts";
 import type { SearchResult, StopType } from "./types";
 
 const GAODE_ENDPOINT = "https://restapi.amap.com/v3/place/text";
@@ -49,48 +49,107 @@ export function hasSearchKeys(): boolean {
 
 const CACHE_TTL = 10 * 60 * 1000;
 const CACHE_MAX = 200;
-const cache = new Map<string, { t: number; results: SearchResult[] }>();
-
-function cacheGet(q: string): SearchResult[] | undefined {
-  const hit = cache.get(q);
-  if (hit && Date.now() - hit.t < CACHE_TTL) return hit.results;
-  if (hit) cache.delete(q);
-  return undefined;
-}
-
-function cacheSet(q: string, results: SearchResult[]) {
-  if (cache.size >= CACHE_MAX) {
-    const oldest = cache.keys().next().value;
-    if (oldest !== undefined) cache.delete(oldest);
-  }
-  cache.set(q, { t: Date.now(), results });
-}
-
 // ------------------------------------------------------------
 // 入口（服务端调用）
 // ------------------------------------------------------------
 
+export interface PlaceSearchInput {
+  query: string;
+  countryCode?: string;
+  city?: string;
+  language?: string;
+  near?: { latitude: number; longitude: number };
+  limit?: number;
+}
+export interface DetailedCandidate extends SearchResult {
+  provider: ProviderName;
+  providerPlaceId: string;
+  coordinateSystem: "WGS84";
+  countryCode?: string;
+  aliases?: Record<string, string>;
+  category?: string;
+}
+export interface DetailedSearchResult {
+  cached: boolean;
+  query: string;
+  searchContext: PlaceSearchInput;
+  candidates: DetailedCandidate[];
+  providerStatus: { provider: ProviderName; status: "ok" | "failed" | "not_configured" | "not_applicable"; message?: string }[];
+  status: "ok" | "partial" | "failed" | "not_configured";
+  expiresAt: string;
+}
+const detailedCache = new Map<string, { t: number; result: DetailedSearchResult }>();
 export async function searchPlaces(query: string, signal?: AbortSignal): Promise<SearchResult[]> {
-  const q = query.trim();
-  if (!q) return [];
-
+  return (await searchPlacesDetailed({ query }, signal)).candidates;
+}
+export async function searchPlacesDetailed(input: PlaceSearchInput, signal?: AbortSignal, timing: { attemptTimeoutMs?: number; totalTimeoutMs?: number } = {}): Promise<DetailedSearchResult> {
+  signal?.throwIfAborted();
+  const budget = AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(timing.totalTimeoutMs ?? 10000)]);
+  const q = input.query?.trim();
+  if (!q || q.length > 500 || (input.countryCode && !/^[a-z]{2}$/i.test(input.countryCode)) ||
+      (input.limit != null && (!Number.isInteger(input.limit) || input.limit < 1 || input.limit > 20)) ||
+      (input.near && (!Number.isFinite(input.near.latitude) || Math.abs(input.near.latitude) > 90 || !Number.isFinite(input.near.longitude) || Math.abs(input.near.longitude) > 180))) {
+    throw Object.assign(new Error("Invalid place search input"), { code: "INVALID_ARGUMENT" });
+  }
+  const options = { ...input, query: q, countryCode: input.countryCode?.toLowerCase(), limit: input.limit ?? 8 };
   const cfg = getConfig();
-  const providers: Array<() => Promise<Candidate[]>> = [];
-  if (cfg.gaodeKey) providers.push(() => gaodeSearch(q, cfg.gaodeKey, signal));
-  if (cfg.locationiqKey) providers.push(() => locationiqSearch(q, cfg.locationiqKey, signal));
-  if (providers.length === 0) return [];
+  // Include all context and configuration identity so an earlier configuration failure is never cached as success.
+  const key = JSON.stringify([options, cfg]);
+  const hit = detailedCache.get(key);
+  if (hit && Date.now() - hit.t < CACHE_TTL) return {...structuredClone(hit.result), cached: true};
+  const providerStatus: DetailedSearchResult["providerStatus"] = [];
+  const lists: Candidate[][] = [];
+  await Promise.all((["gaode", "locationiq"] as const).map(async provider => {
+    const apiKey = provider === "gaode" ? cfg.gaodeKey : cfg.locationiqKey;
+    if (!apiKey) { providerStatus.push({provider, status: "not_configured"}); return; }
+    if (provider === "gaode" && options.countryCode && options.countryCode !== "cn") {
+      providerStatus.push({provider, status: "not_applicable"}); return;
+    }
+    try {
+      lists.push(await (provider === "gaode" ? gaodeSearch(q, apiKey, budget, options, timing.attemptTimeoutMs) : locationiqSearch(q, apiKey, budget, options, timing.attemptTimeoutMs)));
+      providerStatus.push({provider, status: "ok"});
+    } catch {
+      // Provider errors can contain credential-bearing URLs; never return raw fetch error messages.
+      providerStatus.push({provider, status: "failed", message: "Search provider unavailable"});
+    }
+  }));
+  signal?.throwIfAborted();
+  const ok = providerStatus.filter(p => p.status === "ok").length;
+  const failed = providerStatus.some(p => p.status === "failed");
+  const result: DetailedSearchResult = {
+    cached: false,
+    query: q, searchContext: options,
+    candidates: (mergeResults(q, lists) as DetailedCandidate[]).slice(0, options.limit),
+    providerStatus,
+    status: ok ? (failed ? "partial" : "ok") : failed ? "failed" : "not_configured",
+    expiresAt: new Date(Date.now() + CACHE_TTL).toISOString(),
+  };
+  if (ok && !failed) {
+    if (detailedCache.size >= CACHE_MAX) detailedCache.delete(detailedCache.keys().next().value!);
+    detailedCache.set(key, {t: Date.now(), result});
+  }
+  return structuredClone(result);
+}
 
-  const cached = cacheGet(q);
-  if (cached) return cached;
-
-  const settled = await Promise.allSettled(providers.map((p) => withTimeout(p(), 5000)));
-  const lists = settled
-    .filter((r): r is PromiseFulfilledResult<Candidate[]> => r.status === "fulfilled")
-    .map((r) => r.value);
-
-  const results = mergeResults(q, lists).slice(0, 8);
-  cacheSet(q, results);
-  return results;
+/** A deadline aborts the actual request, including body consumption, before regional fallback. */
+async function fetchJson(url: string, signal?: AbortSignal, timeoutMs = 4000): Promise<{status: number; ok: boolean; data: unknown}> {
+  signal?.throwIfAborted();
+  const controller = new AbortController();
+  let rejectDeadline: (reason: unknown) => void = () => {};
+  const deadline = new Promise<never>((_, reject) => { rejectDeadline = reject; });
+  const abort = () => { controller.abort(signal?.reason); rejectDeadline(signal?.reason ?? new Error("Aborted")); };
+  signal?.addEventListener("abort", abort, { once: true });
+  const timer = setTimeout(() => { controller.abort(new Error("Search attempt timed out")); rejectDeadline(new Error("Search attempt timed out")); }, timeoutMs);
+  try {
+    return await Promise.race([ (async () => {
+      const response = await fetch(url, { signal: controller.signal });
+      // Not-found is an empty search; other HTTP failures do not need body parsing.
+      return {status: response.status, ok: response.ok, data: response.ok ? await response.json() : undefined};
+    })(), deadline ]);
+  } finally { clearTimeout(timer); signal?.removeEventListener("abort", abort); }
+}
+function validNumericToken(v: unknown): boolean {
+  return (typeof v === "number" || (typeof v === "string" && v.trim().length > 0)) && Number.isFinite(Number(v));
 }
 
 /** 给请求套超时，避免服务宕机时一直挂起 */
@@ -116,7 +175,7 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
 
 type ProviderName = "gaode" | "locationiq";
 
-interface Candidate extends SearchResult {
+interface Candidate extends DetailedCandidate {
   source: ProviderName;
   /** 知名度 0–1（LocationIQ importance），越高越知名 */
   importance?: number;
@@ -199,16 +258,8 @@ function mergeResults(q: string, lists: Candidate[][]): SearchResult[] {
   const out: SearchResult[] = [];
   for (const { c } of scored) {
     if (out.some((x) => nearSameName(x, c))) continue;
-    out.push({
-      id: c.id,
-      name: c.name,
-      displayName: c.displayName,
-      latitude: c.latitude,
-      longitude: c.longitude,
-      type: c.type,
-      city: c.city,
-      country: c.country,
-    });
+    const { source: _source, importance: _importance, isLandmark: _landmark, order: _order, ...result } = c;
+    out.push(result);
   }
   return out;
 }
@@ -233,6 +284,7 @@ interface GaodePoi {
   type?: string;
   pname?: string | unknown[];    // 省
   cityname?: string | unknown[]; // 市
+  address?: string | unknown[];
   adname?: string | unknown[];   // 区/县
 }
 
@@ -244,18 +296,25 @@ interface GaodeResponse {
 
 const str = (v: unknown): string | undefined => (typeof v === "string" && v ? v : undefined);
 
-async function gaodeSearch(q: string, key: string, signal?: AbortSignal): Promise<Candidate[]> {
+async function gaodeSearch(q: string, key: string, signal?: AbortSignal, options?: PlaceSearchInput, timeoutMs?: number): Promise<Candidate[]> {
   const url = new URL(GAODE_ENDPOINT);
   url.searchParams.set("key", key);
-  url.searchParams.set("keywords", q); // 不给 city 参数 = 全国范围
+  url.searchParams.set("keywords", q);
+  if (options?.city) { url.searchParams.set("city", options.city); url.searchParams.set("citylimit", "true"); }
+  // place/text has no language or near parameter; record this limit rather than imply they were applied.
   url.searchParams.set("output", "json");
   url.searchParams.set("offset", "10");
-  const res = await fetch(url.toString(), { signal });
+  const res = await fetchJson(url.toString(), signal, timeoutMs);
   if (!res.ok) throw new Error(`gaode ${res.status}`);
-  const data = (await res.json()) as GaodeResponse;
+  const data = res.data as GaodeResponse;
   if (data.status !== "1") throw new Error(`gaode ${data.info ?? "error"}`);
   return (data.pois ?? [])
-    .filter((p) => p.name && str(p.location)?.includes(","))
+    .filter((p) => {
+      if (!p.name || !str(p.location)?.includes(",")) return false;
+      const tokens = str(p.location)!.split(",");
+      const coords = tokens.map(Number);
+      return tokens.every(validNumericToken) && coords.length === 2 && coords.every(Number.isFinite) && Math.abs(coords[0]) <= 180 && Math.abs(coords[1]) <= 90;
+    })
     .map((p) => {
       const [lng, lat] = str(p.location)!.split(",").map(Number);
       const wgs = gcj02ToWgs84(lat, lng); // 火星坐标 → OSM 底图坐标
@@ -263,14 +322,15 @@ async function gaodeSearch(q: string, key: string, signal?: AbortSignal): Promis
       return {
         id: `gd_${p.id ?? `${p.name}_${lat.toFixed(4)}_${lng.toFixed(4)}`}`,
         name: p.name!,
-        displayName: [p.name, str(p.adname), city, str(p.pname)].filter(Boolean).join("，"),
+        displayName: [p.name, str(p.address), str(p.adname), city, str(p.pname)].filter(Boolean).join("，"),
         latitude: wgs.lat,
         longitude: wgs.lon,
         type: gaodeToStopType(str(p.type) ?? ""),
         city,
         // 高德 Web 服务纯国内，country 不猜
         country: undefined,
-        source: "gaode",
+        source: "gaode", provider: "gaode", providerPlaceId: p.id ?? "",
+        coordinateSystem: "WGS84", category: str(p.type), countryCode: undefined,
       };
     });
 }
@@ -313,6 +373,7 @@ interface LocationIqHit {
     town?: string;
     village?: string;
     country?: string;
+    country_code?: string;
     state?: string;
   };
 }
@@ -327,28 +388,32 @@ function zhName(h: LocationIqHit): string {
   return h.display_name.split(",")[0].trim();
 }
 
-async function locationiqSearch(q: string, key: string, signal?: AbortSignal): Promise<Candidate[]> {
+async function locationiqSearch(q: string, key: string, signal?: AbortSignal, options?: PlaceSearchInput, timeoutMs?: number): Promise<Candidate[]> {
   // eu1 优先；失败（网络/超时/服务端错误）则退到 us1
   let lastErr: unknown;
   for (const endpoint of LOCATIONIQ_ENDPOINTS) {
     try {
       const url = new URL(endpoint);
       url.searchParams.set("key", key);
-      url.searchParams.set("q", q);
+      url.searchParams.set("q", options?.city ? `${q}, ${options.city}` : q);
       url.searchParams.set("format", "json");
-      url.searchParams.set("limit", "8");
+      url.searchParams.set("limit", String(options?.limit ?? 8));
+      url.searchParams.set("addressdetails", "1");
+      if (options?.countryCode) url.searchParams.set("countrycodes", options.countryCode);
+      if (options?.near) { const {latitude:lat,longitude:lon}=options.near; url.searchParams.set("viewbox", `${Math.max(-180,lon-0.5)},${Math.min(90,lat+0.5)},${Math.min(180,lon+0.5)},${Math.max(-90,lat-0.5)}`); url.searchParams.set("bounded", "0"); }
       url.searchParams.set("extratags", "1");
       url.searchParams.set("namedetails", "1");
-      url.searchParams.set("accept-language", "zh-CN,en");
-      const res = await fetch(url.toString(), { signal });
+      url.searchParams.set("accept-language", options?.language ?? "zh-CN,en");
+      const res = await fetchJson(url.toString(), signal, timeoutMs);
+      if (res.status === 404) return [];
       if (!res.ok) throw new Error(`locationiq ${res.status}`);
-      const hits = (await res.json()) as LocationIqHit[] | { error?: { code: number; message: string } };
+      const hits = res.data as LocationIqHit[] | { error?: { code: number; message: string } };
       if (!Array.isArray(hits)) throw new Error("locationiq error");
       return hits
-        .filter((h) => h.lat && h.lon)
+        .filter((h) => validNumericToken(h.lat) && validNumericToken(h.lon) && Math.abs(Number(h.lat)) <= 90 && Math.abs(Number(h.lon)) <= 180)
         .map((h) => ({
           id: `liq_${h.place_id}`,
-          name: zhName(h),
+          name: options?.language && !options.language.startsWith("zh") ? (h.name || h.display_name.split(",")[0]) : zhName(h),
           displayName: h.display_name,
           latitude: Number(h.lat),
           longitude: Number(h.lon),
@@ -357,9 +422,12 @@ async function locationiqSearch(q: string, key: string, signal?: AbortSignal): P
           country: h.address?.country,
           importance: h.importance,
           isLandmark: Boolean(h.extratags?.wikipedia || h.extratags?.wikidata || h.extratags?.historic),
-          source: "locationiq",
+          source: "locationiq", provider: "locationiq", providerPlaceId: String(h.place_id),
+          coordinateSystem: "WGS84", countryCode: h.address?.country_code?.toUpperCase(),
+          aliases: h.namedetails, category: [h.class, h.type].filter(Boolean).join(":"),
         }));
     } catch (e) {
+      signal?.throwIfAborted();
       lastErr = e;
     }
   }

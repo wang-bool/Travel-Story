@@ -28,3 +28,6 @@ Thumbs.db
 # 本地瓦片缓存（/api/tiles 磁盘缓存 + 整球 MBTiles，勿入库）
 tile-cache/
 data/
+
+# Isolated verification build, separate from a running development server
+.next-verify/

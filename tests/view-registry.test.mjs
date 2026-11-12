@@ -1,0 +1,73 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { createViewRegistry } from '../lib/server/viewRegistry.ts';
+const view = { viewId:'view_test',tripId:'trip_a',page:'plan',ready:true };
+test('commands require matching ready view and page acknowledgment', () => {
+ const registry=createViewRegistry();
+ assert.throws(()=>registry.enqueue('missing','fit_trip',{}), /VIEW_NOT_CONNECTED/);
+ registry.heartbeat(view);
+ const command=registry.enqueue(view.viewId,'focus_stop',{stopId:'stop_a'});
+ assert.equal(command.status,'queued');
+ assert.equal(registry.getCommand(command.commandId).status,'queued');
+ assert.equal(registry.pending(view.viewId).length,1);
+ assert.throws(()=>registry.acknowledge('other',command.commandId,'completed'),/VIEW_NOT_CONNECTED|COMMAND_TARGET_MISMATCH/);
+ registry.acknowledge(view.viewId,command.commandId,'running');
+ registry.acknowledge(view.viewId,command.commandId,'completed');
+ assert.equal(registry.pending(view.viewId).length,0);
+ assert.equal(registry.getCommand(command.commandId).status,'completed');
+ assert.throws(()=>registry.acknowledge(view.viewId,command.commandId,'running'),/INVALID_COMMAND_STATE/);
+});
+test('validation, leases and command expiration prevent replay', () => {
+ let now=1000;
+ const registry=createViewRegistry({now:()=>now});
+ registry.heartbeat(view);
+ assert.throws(()=>registry.enqueue(view.viewId,'pause',{}),/INVALID_ACTION/);
+ assert.throws(()=>registry.enqueue(view.viewId,'play',{}),/INCOMPATIBLE_VIEW/);
+ assert.throws(()=>registry.enqueue(view.viewId,'focus_stop',{}),/INVALID_ARGUMENT/);
+ const command=registry.enqueue(view.viewId,'fit_trip',{});
+ now+=31000;
+ assert.equal(registry.list().length,0);
+ assert.equal(registry.getCommand(command.commandId).status,'expired');
+ registry.heartbeat(view);
+ assert.equal(registry.pending(view.viewId).length,0);
+});
+test('remove expires outstanding commands and snapshots cannot mutate registry', () => {
+ const registry=createViewRegistry();
+ registry.heartbeat({...view,selection:{dayId:'day_1'}});
+ registry.list()[0].selection.dayId='changed';
+ assert.equal(registry.list()[0].selection.dayId,'day_1');
+ const command=registry.enqueue(view.viewId,'fit_trip',{});
+ registry.remove(view.viewId);
+ assert.equal(registry.getCommand(command.commandId).status,'expired');
+});
+test('view and per-view queue limits reject excess work',()=>{
+ const registry=createViewRegistry({maxViews:1,maxPending:2});
+ registry.heartbeat(view);
+ assert.throws(()=>registry.heartbeat({...view,viewId:'other'}),/VIEW_LIMIT/);
+ registry.enqueue(view.viewId,'fit_trip',{}); registry.enqueue(view.viewId,'fit_trip',{});
+ assert.throws(()=>registry.enqueue(view.viewId,'fit_trip',{}),/COMMAND_QUEUE_FULL/);
+});
+test('launch receipt IDs are preserved and reject malformed values',()=>{
+ const registry=createViewRegistry();
+ const launchId='550e8400-e29b-41d4-a716-446655440000';
+ registry.heartbeat({...view,launchId});
+ assert.equal(registry.list()[0].launchId,launchId);
+ assert.throws(()=>registry.heartbeat({...view,launchId:'../bad'}),/INVALID_ARGUMENT/);
+});
+test('application window navigates from home and preserves navigation across routes',()=>{
+ const registry=createViewRegistry();
+ registry.heartbeat({viewId:'app',page:'home',ready:true,appBridge:true,host:'browser'});
+ assert.throws(()=>registry.enqueue('app','fit_trip'),/INCOMPATIBLE_VIEW/);
+ const navigation=registry.enqueue('app','navigate',{tripId:'trip_b',page:'plan',revision:2});
+ assert.equal(navigation.tripId,'trip_b');
+ registry.acknowledge('app',navigation.commandId,'running');
+ registry.heartbeat({viewId:'app',tripId:'trip_b',page:'plan',ready:false});
+ assert.equal(registry.getCommand(navigation.commandId).status,'running');
+ registry.heartbeat({viewId:'app',tripId:'trip_b',page:'plan',ready:true});
+ const leaf=registry.enqueue('app','fit_trip');
+ registry.heartbeat({viewId:'app',tripId:'trip_b',page:'play',ready:false});
+ assert.equal(registry.getCommand(leaf.commandId).status,'expired');
+ assert.equal(registry.getCommand(navigation.commandId).status,'running');
+ assert.doesNotThrow(()=>registry.enqueue('app','navigate',{tripId:'trip_c',page:'plan'}));
+ assert.throws(()=>registry.enqueue('app','navigate',{tripId:'../evil',page:'plan'}),/INVALID_ARGUMENT/);
+});

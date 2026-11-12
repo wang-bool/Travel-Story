@@ -1,3 +1,4 @@
+import { assertLocalRequest, errorResponse } from "@/lib/server/localAccess";
 // 素材读取 / 删除：GET /api/media/<id>（支持 Range，视频可拖进度条），DELETE 删除
 import { NextRequest } from "next/server";
 import { deleteMedia, readMedia } from "@/lib/server/db";
@@ -6,6 +7,7 @@ export async function GET(
   req: NextRequest,
   ctx: { params: Promise<{ id: string }> }
 ) {
+  try { await assertLocalRequest(req); } catch (error) { return errorResponse(error); }
   const { id } = await ctx.params;
   let found;
   try {
@@ -49,9 +51,10 @@ export async function GET(
 }
 
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   ctx: { params: Promise<{ id: string }> }
 ) {
+  try { await assertLocalRequest(req); } catch (error) { return errorResponse(error); }
   const { id } = await ctx.params;
   try {
     await deleteMedia(id);

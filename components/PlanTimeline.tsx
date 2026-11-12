@@ -18,6 +18,7 @@ import { TransportGlyph } from "@/lib/icons";
 export function PlanTimeline({
   trip,
   selectedStopId,
+  agentStopIds = [],
   onSelectStop,
   onAddStop,
   onRemoveStop,
@@ -31,6 +32,7 @@ export function PlanTimeline({
 }: {
   trip: Trip;
   selectedStopId?: string | null;
+  agentStopIds?: string[];
   onSelectStop: (stop: TripStop) => void;
   onAddStop: (dayId: string, result: import("@/lib/types").SearchResult) => void;
   onRemoveStop: (stopId: string) => void;
@@ -61,6 +63,7 @@ export function PlanTimeline({
           <section
             key={day.id}
             className="day-block"
+            data-day-id={day.id}
             onDragOver={(e) => {
               if (dragId) e.preventDefault();
             }}
@@ -97,7 +100,8 @@ export function PlanTimeline({
                 return (
                   <li key={stop.id}>
                     <div
-                      className={`stop-card ${selectedStopId === stop.id ? "active" : ""}`}
+                      className={`stop-card ${selectedStopId === stop.id ? "active" : ""} ${agentStopIds.includes(stop.id) ? "agent-highlight" : ""}`}
+                      data-stop-id={stop.id}
                       draggable
                       onDragStart={() => setDragId(stop.id)}
                       onDragEnd={() => setDragId(null)}

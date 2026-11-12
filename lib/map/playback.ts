@@ -87,12 +87,7 @@ export function playTrip(opts: PlayOptions): PlaybackController {
     // 放行挂起的 wait：取消时播放流程能走完 finally 收尾（onEnd 一定会触发），
     // 否则 await wait 永远悬挂，录制器收不到结束信号
     waitDone?.();
-    engine.hideVehicle();
-    engine.clearTraveled();
-    engine.setRoutesVisible(true);
-    engine.setProjection("mercator");
-    engine.setAutoProjection(true);
-    settle();
+
   };
 
   const shot = (s: PlaybackShot) => callbacks.onShot(s);
@@ -175,6 +170,7 @@ export function playTrip(opts: PlayOptions): PlaybackController {
     if (cancelled) return;
 
     await new Promise<void>((resolve) => {
+      waitDone = resolve;
       const start = performance.now();
       // 载具每帧都更新；「已行驶」轨迹每 2 帧更新一次几何：
       // 轨迹生长不需要 60 步/秒的折线刷新，30 步/秒视觉无差别，
@@ -210,6 +206,7 @@ export function playTrip(opts: PlayOptions): PlaybackController {
       };
       raf = requestAnimationFrame(step);
     });
+    waitDone = null;
   };
 
   /** 大圆航线飞行（§22 飞机动画；UFO/火箭等空中载具同走此路径） */
@@ -235,6 +232,7 @@ export function playTrip(opts: PlayOptions): PlaybackController {
     if (cancelled) return;
 
     await new Promise<void>((resolve) => {
+      waitDone = resolve;
       const start = performance.now();
       // 同 drive：载具每帧更新，红色「已行驶」轨迹每 2 帧更新一次几何
       let traveledFrame = 0;
@@ -261,6 +259,7 @@ export function playTrip(opts: PlayOptions): PlaybackController {
       };
       raf = requestAnimationFrame(step);
     });
+    waitDone = null;
   };
 
   // ------------------------------------------------------------
@@ -297,8 +296,10 @@ export function playTrip(opts: PlayOptions): PlaybackController {
         engine.map.off("load", finish);
         engine.map.off("style.load", finish);
         if (timer) clearTimeout(timer);
+        waitDone = null;
         r();
       };
+      waitDone = finish;
       timer = setTimeout(finish, 5000);
       engine.map.on("load", finish);
       engine.map.on("style.load", finish);
@@ -354,16 +355,20 @@ export function playTrip(opts: PlayOptions): PlaybackController {
           engine.hideVehicle();
         }
       }
+    } catch (error) {
+      cancelled = true;
+      console.warn('[travel-story] 播放失败', error);
     } finally {
-      engine.clearTraveled();
-      engine.hideVehicle();
-      engine.setRoutesVisible(true);
-      engine.setProjection("mercator");
-      engine.setAutoProjection(true);
-      settle();
-      callbacks.onEnd(cancelled);
+      try {
+        engine.clearTraveled();
+        engine.hideVehicle();
+        engine.setRoutesVisible(true);
+        engine.setProjection("mercator");
+        engine.setAutoProjection(true);
+      } catch { /* Map may already have been destroyed on navigation. */ }
+      try { callbacks.onEnd(cancelled); } finally { settle(); }
     }
-  })();
+  })().catch(() => { /* A consumer callback must not leave an unhandled task. */ });
 
   return { cancel, done };
 }

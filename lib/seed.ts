@@ -10,11 +10,11 @@
 import { createTrip, addDay, addStop, getSnapshot } from "./store";
 import type { StopType } from "./types";
 
-export function seedIfEmpty(): boolean {
+export async function seedIfEmpty(): Promise<boolean> {
   const trips = getSnapshot();
   if (trips.length > 0) return false;
 
-  const trip = createTrip({
+  const trip = await createTrip({
     name: "上海四日游",
     startDate: "2026-10-01",
     endDate: "2026-10-04",
@@ -28,9 +28,7 @@ export function seedIfEmpty(): boolean {
   // createTrip 只建第 1 天；按日期范围补齐 Day 2-4（10-02 ~ 10-04），
   // 否则后面 addStop 找不到对应 dayId 会被静默跳过。
   let current = trip;
-  for (let d = 0; d < 3; d++) {
-    current = addDay(current.id);
-  }
+
   const dayIds = current.days.map((d) => d.id);
 
   const places: Array<{
@@ -81,7 +79,7 @@ export function seedIfEmpty(): boolean {
   ];
 
   for (const p of places) {
-    current = addStop(current.id, dayIds[p.day - 1], {
+    current = await addStop(current.id, dayIds[p.day - 1], {
       name: p.name,
       city: p.city,
       country: p.country,

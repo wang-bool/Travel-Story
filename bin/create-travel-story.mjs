@@ -32,10 +32,10 @@ function parseArguments(args) {
   return { skipInstall, targetName: targetName || "travel-story" };
 }
 
-function requireNode20() {
-  const majorVersion = Number.parseInt(process.versions.node.split(".")[0], 10);
-  if (majorVersion < 20) {
-    throw new Error(`Node.js 20 or later is required. Found ${process.versions.node}.`);
+function requireSupportedNode() {
+  const [majorVersion, minorVersion] = process.versions.node.split(".").map(Number);
+  if (majorVersion < 22 || (majorVersion === 22 && minorVersion < 18)) {
+    throw new Error(`Node.js 22.18 or later is required. Found ${process.versions.node}.`);
   }
 }
 
@@ -62,7 +62,7 @@ function installDependencies(targetDir) {
 }
 
 async function main() {
-  requireNode20();
+  requireSupportedNode();
   const { skipInstall, targetName } = parseArguments(process.argv.slice(2));
   const sourceDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
   const targetDir = path.resolve(process.cwd(), targetName);
@@ -78,7 +78,8 @@ async function main() {
   console.log(`\nTravel Story is ready in ${targetDir}`);
   console.log(`cd ${targetName}`);
   console.log("cp .env.example .env.local");
-  console.log("npm run dev");
+  console.log("npm --silent run agent");
+  console.log("For AI tools, configure your MCP client to run node with this project's mcp/start.mjs (see docs/mcp.md).");
 }
 
 main().catch((error) => {

@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useTrips } from "@/lib/useStore";
-import { deleteTrip, formatDateCN, tripDays, updateTrip, whenSynced } from "@/lib/store";
-import { seedIfEmpty } from "@/lib/seed";
+import { deleteTrip, formatDateCN, tripDays, editItinerary } from "@/lib/store";
+
 import { CreateTripModal } from "@/components/CreateTripModal";
 import { LandmarkGlyph } from "@/components/LandmarkMarker";
 import { GlobeMap, type GlobeHandle, type GlobeMarker } from "@/components/GlobeMap";
@@ -17,18 +17,6 @@ export default function HomePage() {
   const [footprints, setFootprints] = useState(false);
   const globeRef = useRef<GlobeHandle>(null);
   const tripsSectionRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    // seed 必须等首次服务端同步完成：
-    // 「服务端有数据 + 全新浏览器」时抢先种入示例会顶掉服务端数据
-    let live = true;
-    whenSynced().then(() => {
-      if (live) seedIfEmpty();
-    });
-    return () => {
-      live = false;
-    };
-  }, []);
 
   // 足迹数据：每一段旅程的每一个地点各一面旗（与旅行记录卡片同源，不去重）
   const markers = useMemo<GlobeMarker[]>(() => {
@@ -90,7 +78,7 @@ export default function HomePage() {
             /* 单个失败跳过，不影响其他地点 */
           }
         }
-        if (changed && live) updateTrip(t.id, { stops });
+        if (changed && live) await editItinerary(t.id, stops.filter((s, i) => s.city !== t.stops[i].city || s.country !== t.stops[i].country).map(s => ({ op: "update_stop", stopId: s.id, patch: { ...(s.city ? { city: s.city } : {}), ...(s.country ? { country: s.country } : {}) } }))).catch(() => {});
       }
     })();
     return () => {
@@ -303,7 +291,7 @@ export default function HomePage() {
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        if (confirm(`删除「${t.name}」？此操作不可撤销。`)) deleteTrip(t.id);
+                        if (confirm(`删除「${t.name}」？此操作不可撤销。`)) void deleteTrip(t.id).catch(() => {});
                       }}
                     >
                       删除

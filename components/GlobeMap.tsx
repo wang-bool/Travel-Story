@@ -105,6 +105,10 @@ export function GlobeMap({
   const initialPadRef = useRef<maplibregl.PaddingOptions | null>(null);
   const zoomRangeRef = useRef({ min: minZoom, max: maxZoom });
   zoomRangeRef.current = { min: minZoom, max: maxZoom };
+  const paddingRef = useRef(padding);
+  paddingRef.current = padding;
+  const flagsVisibleRef = useRef(showFlags);
+  flagsVisibleRef.current = showFlags;
   const footprintsPadRef = useRef(footprintsPadding);
   footprintsPadRef.current = footprintsPadding;
   const footprintsZoomRef = useRef(footprintsZoom);
@@ -195,6 +199,16 @@ export function GlobeMap({
     const pad = padding?.() ?? null;
     initialPadRef.current = pad;
     if (pad) map.setPadding(pad);
+    // 容器变化（包括断点切换）时同步画布和构图，不重建地图或重置缩放。
+    const observer = new ResizeObserver(() => {
+      map.resize();
+      const normalPadding = paddingRef.current?.() ?? ZERO_PADDING;
+      initialPadRef.current = normalPadding;
+      map.setPadding(flagsVisibleRef.current
+        ? footprintsPadRef.current?.() ?? ZERO_PADDING
+        : normalPadding);
+    });
+    observer.observe(containerRef.current);
     if (process.env.NODE_ENV !== "production") {
       // 调试钩子（仅 dev）：控制台/Playwright 可直接读镜头状态
       (window as unknown as { __tsGlobe?: maplibregl.Map }).__tsGlobe = map;
@@ -244,6 +258,7 @@ export function GlobeMap({
     raf = requestAnimationFrame(tick);
 
     return () => {
+      observer.disconnect();
       cancelAnimationFrame(raf);
       map.remove();
       mapRef.current = null;

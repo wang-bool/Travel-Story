@@ -76,3 +76,18 @@ test("copyProject writes application source and a normal app manifest", async ()
     await rm(targetDir, { recursive: true, force: true });
   }
 });
+
+test("copyProject includes a portable skill and its nested references", async t => {
+  const sourceDir = await makeTempDir("travel-story-skill-source-");
+  const targetDir = await makeTempDir("travel-story-skill-output-");
+  t.after(() => rm(sourceDir, { recursive: true, force: true }));
+  t.after(() => rm(targetDir, { recursive: true, force: true }));
+  const relative = path.join("skills", "travel-story-planner");
+  await mkdir(path.join(sourceDir, relative, "references"), { recursive: true });
+  await writeFile(path.join(sourceDir, "package.json"), JSON.stringify({ name: "generator" }));
+  await writeFile(path.join(sourceDir, relative, "SKILL.md"), "# Portable skill\n[Weather](references/weather.md)\n");
+  await writeFile(path.join(sourceDir, relative, "references", "weather.md"), "weather reference\n");
+  await copyProject({ sourceDir, targetDir });
+  assert.equal(await readFile(path.join(targetDir, relative, "SKILL.md"), "utf8"), "# Portable skill\n[Weather](references/weather.md)\n");
+  assert.equal(await readFile(path.join(targetDir, relative, "references", "weather.md"), "utf8"), "weather reference\n");
+});

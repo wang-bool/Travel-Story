@@ -1,0 +1,21 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import {readFile} from 'node:fs/promises';
+import vm from 'node:vm';
+import ts from 'typescript';
+test('cancel done waits until engine teardown and end callback have both completed',async()=>{
+ const source=await readFile(new URL('../lib/map/playback.ts',import.meta.url),'utf8');
+ const body=source.slice(source.indexOf('export function playTrip'),source.indexOf('// 帮助函数'));
+ const js=ts.transpileModule(body.replace('export function','function'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.None}}).outputText;
+ const calls=[];
+ const engine={map:{getLayer:()=>true,getCanvas:()=>({width:100,height:100})}};
+ for(const method of ['hideVehicle','clearTraveled','setRoutesVisible','setProjection','setAutoProjection'])engine[method]=()=>calls.push(method);
+ const context={setTimeout,clearTimeout,cancelAnimationFrame:()=>{},viewportMinPx:()=>100};
+ vm.createContext(context);vm.runInContext(js+'; globalThis.playTrip=playTrip;',context);
+ const ctrl=context.playTrip({engine,stops:[],segments:[],callbacks:{onShot:()=>{},onEnd:()=>calls.push('onEnd')}});
+ ctrl.cancel();
+ assert.deepEqual(calls,[], 'cancel signals termination, cleanup belongs to finalizer');
+ await ctrl.done;
+ assert.equal(calls.at(-1),'onEnd');
+ assert.equal(calls.filter(x=>x==='hideVehicle').length,1);
+});

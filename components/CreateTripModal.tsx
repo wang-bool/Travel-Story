@@ -13,9 +13,15 @@ export function CreateTripModal({ onClose }: { onClose: () => void }) {
 
   const canSave = name.trim().length > 0 && startDate && endDate && startDate <= endDate;
 
-  function handleCreate() {
-    if (!canSave) return;
-    const trip = createTrip({
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleCreate() {
+    if (!canSave || saving) return;
+    setSaving(true);
+    setError("");
+    try {
+    const trip = await createTrip({
       name: name.trim(),
       startDate,
       endDate,
@@ -23,6 +29,8 @@ export function CreateTripModal({ onClose }: { onClose: () => void }) {
     });
     onClose();
     router.push(`/trip/${trip.id}`);
+    } catch (e) { setError(e instanceof Error ? e.message : "创建失败"); }
+    finally { setSaving(false); }
   }
 
   return (
@@ -69,11 +77,12 @@ export function CreateTripModal({ onClose }: { onClose: () => void }) {
           />
         </label>
 
+        {error && <p role="alert">{error}</p>}
         <div className="modal-actions">
           <button className="btn btn-ghost" onClick={onClose}>
             取消
           </button>
-          <button className="btn" disabled={!canSave} onClick={handleCreate}>
+          <button className="btn" disabled={!canSave || saving} onClick={handleCreate}>
             创建行程
           </button>
         </div>

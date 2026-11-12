@@ -1,3 +1,4 @@
+import { assertLocalRequest, errorResponse } from "@/lib/server/localAccess";
 // 纪录片视频：POST /api/recordings?trip=<行程名>&ext=<webm|mp4>
 // body 为浏览器录制的视频字节；webm 一律用 ffmpeg 转码成 mp4（H.264），
 // 返回可下载的 url。转码是同步等待的——几十秒的片段几秒就能转完。
@@ -62,6 +63,7 @@ async function validateMp4(input: string): Promise<void> {
 }
 
 export async function POST(req: NextRequest) {
+  try { await assertLocalRequest(req); } catch (error) { return errorResponse(error); }
   try {
     const tripName = (req.nextUrl.searchParams.get("trip") ?? "纪录片").trim() || "纪录片";
     const extParam = req.nextUrl.searchParams.get("ext");

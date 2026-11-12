@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { AppAgentBridge } from "@/components/AppAgentBridge";
+import { SyncStatus } from "@/components/SyncStatus";
+import { AgentActivityPanel } from "@/components/AgentActivityPanel";
 
 export const metadata: Metadata = {
   title: "Travel Story — 你的旅行计划，本身就是纪录片脚本",
@@ -10,7 +13,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="zh-CN">
-      <body>{children}</body>
+      <body><AppAgentBridge>{children}<SyncStatus /><AgentActivityPanel /></AppAgentBridge></body>
     </html>
   );
 }

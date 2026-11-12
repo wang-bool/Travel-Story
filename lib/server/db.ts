@@ -13,7 +13,7 @@ import { promises as fs } from "fs";
 import { randomUUID } from "node:crypto";
 import path from "path";
 
-export const DATA_DIR = path.join(process.cwd(), "data");
+export const DATA_DIR = process.env.TRAVEL_STORY_DATA_DIR || path.join(process.cwd(), "data");
 const TRIPS_FILE = path.join(DATA_DIR, "trips.json");
 const MEDIA_DIR = path.join(DATA_DIR, "media");
 export const RECORDINGS_DIR = path.join(DATA_DIR, "recordings");
@@ -37,21 +37,6 @@ export async function ensureDirs() {
 // ------------------------------------------------------------
 // 行程库（整库 JSON）
 // ------------------------------------------------------------
-
-export async function readTripsDB(): Promise<{ trips: unknown[] }> {
-  try {
-    const raw = await fs.readFile(TRIPS_FILE, "utf-8");
-    const parsed = JSON.parse(raw);
-    return { trips: Array.isArray(parsed.trips) ? parsed.trips : [] };
-  } catch {
-    return { trips: [] };
-  }
-}
-
-export async function writeTripsDB(db: { trips: unknown[] }): Promise<void> {
-  await ensureDirs();
-  await writeFileAtomic(TRIPS_FILE, JSON.stringify(db));
-}
 
 // ------------------------------------------------------------
 // 素材二进制

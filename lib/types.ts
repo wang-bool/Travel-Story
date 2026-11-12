@@ -56,12 +56,37 @@ export type StopType =
   | "bridge"
   | "other";
 
+/** 某一天的天气（由 Agent 研究天气预报后通过 set_weather 写入） */
+export interface DayWeather {
+  /** 展示文本，如「晴转多云」「小到中雨」 */
+  label: string;
+  /** 最低/最高气温（摄氏度） */
+  low?: number;
+  high?: number;
+  /** 地图特效类别 */
+  effect?:
+    | "sun"
+    | "cloud"
+    | "overcast"
+    | "fog"
+    | "drizzle"
+    | "rain"
+    | "heavy-rain"
+    | "snow"
+    | "heavy-snow"
+    | "breeze"
+    | "wind"
+    | "storm";
+}
+
 export interface TripDay {
   id: string;
   /** 1-based 第几天 */
   day: number;
   /** YYYY-MM-DD */
   date: string;
+  /** 当日天气（可选） */
+  weather?: DayWeather;
 }
 
 export interface TripStop {
@@ -97,6 +122,7 @@ export interface RouteGeometry {
 }
 
 export interface TripSegment {
+  routeInfo?: { requestedTransport: string; actualProfile: string | null; provider: string | null; geometryKind: string; quality: string; warnings: string[] };
   id: string;
   fromStopId: string;
   toStopId: string;
@@ -107,6 +133,9 @@ export interface TripSegment {
 }
 
 export interface Trip {
+  /** Transient UI snapshot flag; never persisted as trip content. */
+  agentTaskActive?: boolean;
+  revision?: number;
   id: string;
   name: string;
   /** YYYY-MM-DD */
